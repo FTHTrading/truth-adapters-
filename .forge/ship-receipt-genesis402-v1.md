@@ -78,6 +78,21 @@ two-command action listed under "To finish".
 `8845f9ffd892255f…`, all discovery paths, robots, sitemap, favicon,
 `ecosystem-bar.js`, `/legacy`).
 
+**Second attempt (ADR-0006 accepted, "keep going"):** `wrangler.jsonc` now
+carries `"name": "genesis402-apex"` (path 2). The deploy was blocked by the
+auto-mode classifier again. This is the one action only the founder can run.
+
+## Founder: the three commands that finish it (PowerShell)
+
+```powershell
+cd C:\Users\Kevan\truth-adapters
+pnpm gateway:deploy
+Get-Content keys\witness.jwk.json | npx wrangler secret put WITNESS_PRIVATE_KEY_JWK -c packages\gateway\wrangler.jsonc
+node scripts\verify-served.ts https://genesis402.com; node scripts\verify-served.ts https://www.genesis402.com
+```
+
+Rollback at any time: `npx wrangler rollback --name genesis402-apex` (choose version `36d59739`).
+
 ## To finish (founder, either path)
 
 **Path 1 — release the routes (recommended, keeps script names honest):**

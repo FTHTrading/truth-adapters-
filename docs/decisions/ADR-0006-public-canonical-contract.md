@@ -1,6 +1,6 @@
 # ADR-0006: Public canonical contract for genesis402.com (resolves F-7)
 
-- **Status:** Proposed — becomes Accepted when Kevan replies "accepted"; until then no routing, Pages target, public copy or schema changes anywhere.
+- **Status:** Accepted 2026-09-13 (Kevan, chat: "okay keep going", after the cut-over sequence was laid out with this ADR as step 1, and consistent with his earlier directive "genesis402.com needs to be truth-adapters"). Supersedes the "receipt-v1 is the public format" line in the 402-truth push.
 - **Date:** 2026-09-13
 - **Deciders:** Kevan
 - **Scope:** Cross-cutting; binds `truth-adapters`, `unykorn-control`, `402-truth`, and the `genesis402` Cloudflare zone.

@@ -1,6 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
-  "name": "truth-gateway",
+  // Script name inherited from the previous apex Worker: Cloudflare binds zone routes to the script name and
+  // wrangler cannot delete routes, so the truth gateway deploys under it (ADR-0006, ship receipt path 2).
+  // Rollback target: version 36d59739 via `wrangler rollback --name genesis402-apex`.
+  "name": "genesis402-apex",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -8,7 +11,7 @@
   "triggers": { "crons": ["0 * * * *"] },
   // Step A (preview): workers_dev true, no routes. Step B (cut-over): routes below enabled by the
   // ship receipt in .forge/ship-receipt-genesis402-v1.md. Rollback = redeploy with routes removed.
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     { "pattern": "genesis402.com/*", "zone_name": "genesis402.com" },
     { "pattern": "www.genesis402.com/*", "zone_name": "genesis402.com" }
