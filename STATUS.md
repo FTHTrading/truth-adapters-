@@ -7,9 +7,9 @@ file. A label changes only when the evidence in the right-hand column changes.
 |---|---|---|
 | Kernel: canonical hash, chained ledger, Ed25519 witnesses, witnessed cost, merkle proofs | `LOCAL_VERIFIED` | 85/85 node:test; no external review yet |
 | Adapters (6) with opinion-key refusal | `LOCAL_VERIFIED` | tests against mocked upstreams; git against a real temp repo |
-| Gateway Worker | `LOCAL_VERIFIED` | handler tests with MemoryLedger + mocked facilitator; `wrangler --dry-run` bundles |
-| D1 append-only triggers | `IMPLEMENTED_NOT_DEPLOYED` | `packages/gateway/schema.sql` written, never applied |
-| x402 settlement (USDC) | `PENDING_CONFIGURATION` | pay-to is the zero address by design; paid routes return 503 |
+| Gateway Worker | `DEPLOYED_PREVIEW` | `truth-gateway.kevanbtc.workers.dev`, verify-served PASS 14/14; genesis402.com cut-over blocked on a route held by `genesis402-apex` (ship receipt) |
+| D1 append-only triggers | `DEPLOYED_EXERCISED` | `truth-ledger-v1`; UPDATE and DELETE abort with `SQLITE_CONSTRAINT_TRIGGER` (exercised on the abandoned `truth-ledger`, see ship receipt) |
+| x402 settlement (USDC) | `DRY_RUN` | Base Sepolia via x402.org facilitator; pay-to = UnyKorn treasury; no paid round-trip exercised yet (needs a funded Sepolia payer key) |
 | Apostle ATP rail | `PENDING_CONFIGURATION` | verify call shape reused from UnyKorn-X402-aws; not called live |
 | Mode | `test` when `X402_NETWORK=base-sepolia`, `live` only on `base`, `local` for file ledgers | `packages/gateway/src/config.ts` |
 | Anchoring | `UNANCHORED` externally | merkle anchors are internal ledger records signed by the same key; no OTS/TSA/chain anchor |

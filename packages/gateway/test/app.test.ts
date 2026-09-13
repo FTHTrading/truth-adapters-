@@ -9,6 +9,7 @@ import { WORKER_ADAPTERS } from "../../adapters/src/registry.ts";
 import type { AdapterSpec } from "../../adapters/src/types.ts";
 import { generateKeys, kindOf, MemoryLedger, verifyChain, verifyMerkleProof } from "../../kernel/src/index.ts";
 import { handle, runAnchor, type Deps } from "../src/app.ts";
+import { scanClaims } from "../src/claims.ts";
 import { configFromEnv } from "../src/config.ts";
 
 const PAY_TO = "0x1111111111111111111111111111111111111111";
@@ -125,6 +126,42 @@ test("discovery documents disclose DRY_RUN and carry labels; security.txt is 404
   const withContact = await makeDeps(goodFacilitator(), WORKER_ADAPTERS, { SECURITY_CONTACT: "mailto:security@example.invalid" });
   const t = await (await get(withContact, "/.well-known/security.txt")).text();
   assert.match(t, /^Contact: mailto:security@example.invalid/);
+});
+
+test("landing page for browsers, manifest for JSON clients, agent card, security.txt alias", async () => {
+  const deps = await makeDeps(goodFacilitator(), WORKER_ADAPTERS, { SECURITY_CONTACT: "mailto:security@example.invalid" });
+  const html = await handle(new Request("https://gw.test/", { headers: { accept: "text/html,application/xhtml+xml" } }), deps);
+  assert.match(html.headers.get("content-type") ?? "", /text\/html/);
+  const body = await html.text();
+  assert.match(body, /records what happened, who paid, and when/);
+  assert.match(body, /mode: test/);
+  assert.match(body, /UNANCHORED/);
+  assert.ok(body.includes(deps.keys.publicKeyHex));
+  const m = await handle(new Request("https://gw.test/", { headers: { accept: "application/json" } }), deps);
+  assert.equal(((await m.json()) as any).schema, "truth-manifest-v1");
+  const card = (await (await get(deps, "/.well-known/agent.json")).json()) as any;
+  assert.equal(card.schemaVersion, "truth-agent-card-1");
+  assert.equal(card.tools.length, Object.keys(WORKER_ADAPTERS).length);
+  assert.ok(card.limitations.length === 2);
+  assert.match(await (await get(deps, "/security.txt")).text(), /^Contact:/);
+});
+
+test("claims gate: every served route is free of forbidden phrases", async () => {
+  const deps = await makeDeps(goodFacilitator(), WORKER_ADAPTERS, { SECURITY_CONTACT: "mailto:security@example.invalid" });
+  await post(deps, "/witness/document", { sha256: HELLO_SHA }, { "x-payment": paymentHeader() });
+  await runAnchor(deps);
+  const routes: Array<[string, string]> = [
+    ["/", "text/html"], ["/", "application/json"], ["/.well-known/truth.json", "*/*"], ["/.well-known/x402", "*/*"], ["/.well-known/agent.json", "*/*"],
+    ["/status.json", "*/*"], ["/pricing.json", "*/*"], ["/openapi.json", "*/*"], ["/llms.txt", "*/*"], ["/health", "*/*"], ["/anchor", "*/*"],
+    ["/entries?from=0&limit=10", "*/*"], ["/.well-known/security.txt", "*/*"],
+  ];
+  for (const [path, accept] of routes) {
+    const res = await handle(new Request(`https://gw.test${path}`, { headers: { accept } }), deps);
+    const text = await res.text();
+    const verdict = scanClaims(text);
+    assert.deepEqual(verdict.hits, [], `${path} (${accept})`);
+  }
+  assert.equal(scanClaims("THE EMPIRE IS BUILT DIFFERENT. Not a demo. 570+ agents. custody insured.").hits.length >= 4, true);
 });
 
 test("a correction references an entry without changing it; /verify lists referenced_by", async () => {

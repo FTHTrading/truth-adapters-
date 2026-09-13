@@ -32,7 +32,10 @@ export async function importKeysJwk(jwk: JsonWebKey): Promise<WitnessKeys> {
   if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || !jwk.x || !jwk.d) {
     throw new TypeError("expected an Ed25519 OKP private JWK");
   }
-  const privateKey = await crypto.subtle.importKey("jwk", jwk, ALG, true, ["sign"]);
+  // Node 24 exports `alg: "Ed25519"`; Cloudflare Workers rejects that value on import
+  // ("does not match requested Ed25519 curve"). Only kty/crv/x/d carry the key.
+  const privJwk: JsonWebKey = { kty: "OKP", crv: "Ed25519", x: jwk.x, d: jwk.d };
+  const privateKey = await crypto.subtle.importKey("jwk", privJwk, ALG, true, ["sign"]);
   const pubJwk: JsonWebKey = { kty: "OKP", crv: "Ed25519", x: jwk.x };
   const publicKey = await crypto.subtle.importKey("jwk", pubJwk, ALG, true, ["verify"]);
   const raw = await exportRaw(publicKey);

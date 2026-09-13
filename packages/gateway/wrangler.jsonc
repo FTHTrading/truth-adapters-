@@ -6,24 +6,31 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "triggers": { "crons": ["0 * * * *"] },
+  // Step A (preview): workers_dev true, no routes. Step B (cut-over): routes below enabled by the
+  // ship receipt in .forge/ship-receipt-genesis402-v1.md. Rollback = redeploy with routes removed.
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "genesis402.com/*", "zone_name": "genesis402.com" },
+    { "pattern": "www.genesis402.com/*", "zone_name": "genesis402.com" }
+  ],
   "d1_databases": [
     {
       "binding": "LEDGER",
-      "database_name": "truth-ledger",
-      // Set after `wrangler d1 create truth-ledger` (ship receipt step 1). Deploy fails until then.
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_name": "truth-ledger-v1",
+      "database_id": "4b03924c-0b42-40f3-9898-61511ccba7ce"
     }
   ],
   "vars": {
-    "SERVICE_NAME": "truth-gateway",
-    // Testnet by default. Mainnet ("base") + CDP facilitator is founder flag F-3.
+    "SERVICE_NAME": "genesis402-truth-gateway",
+    // test mode until the mainnet facilitator (CDP) credentials exist; see .forge/founder-flags.md F-3
     "X402_NETWORK": "base-sepolia",
     "X402_FACILITATOR_URL": "https://x402.org/facilitator",
-    // Fail-safe: the zero address keeps paid routes DISABLED (503) until a real pay-to is set.
-    "X402_PAY_TO": "0x0000000000000000000000000000000000000000",
+    // UnyKorn LLC treasury address already published as pay-to on the live rail (twin.unykorn.org/health)
+    "X402_PAY_TO": "0x7d9a65d06dcc435a52D5880C6310Bd6E96c156DB",
     "X402_MAX_TIMEOUT_SECONDS": "60",
     "APOSTLE_FACILITATOR_URL": "https://x402.unykorn.org",
-    // 0.25 ATP (18 decimals), matching the PASS Basic per-op price in UnyKorn-X402-aws.
-    "APOSTLE_PRICE_ATP_RAW": "250000000000000000"
+    "APOSTLE_PRICE_ATP_RAW": "250000000000000000",
+    // already public on genesis402.com's served discovery documents
+    "SECURITY_CONTACT": "mailto:kevan@unykorn.org"
   }
 }

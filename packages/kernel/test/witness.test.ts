@@ -58,10 +58,10 @@ test("a throwing translator yields a signed FAILED event, not a crash", async ()
   assert.deepEqual(await verifyEvent(e), { ok: true });
 });
 
-test("keys round-trip through JWK and keep the same public key", async () => {
+test("keys round-trip through JWK and keep the same public key, even with runtime-specific alg/key_ops/ext members", async () => {
   const keys = await generateKeys();
   const jwk = await exportKeysJwk(keys);
-  const back = await importKeysJwk(jwk);
+  const back = await importKeysJwk({ ...jwk, alg: "Ed25519", key_ops: ["sign"], ext: true });
   assert.equal(back.publicKeyHex, keys.publicKeyHex);
   const w = createWitness("T", back, (i) => i, { clock });
   const e = (await w.observe({ x: 1 }))!;

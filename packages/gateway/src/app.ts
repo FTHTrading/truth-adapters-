@@ -35,6 +35,7 @@ import {
 } from "../../kernel/src/index.ts";
 import { ANCHORING_STATUS, formatAtomic, labelsOf, LIMITATIONS, type GatewayConfig } from "./config.ts";
 import { llmsTxt, openapiJson, pricingJson, securityTxt, statusJson, wellKnownX402 } from "./discovery.ts";
+import { agentCard, landingHtml } from "./landing.ts";
 import {
   apostleVerify,
   buildRequirements,
@@ -347,8 +348,19 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
 
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
-  if (req.method === "GET") {
-    if (path === "/" || path === "/.well-known/truth.json") return json(200, manifest(deps, url.origin, await deps.ledger.head()));
+  if (req.method === "GET" || req.method === "HEAD") {
+    if (path === "/") {
+      const accept = req.headers.get("accept") ?? "";
+      const wantsJson = accept.includes("application/json") && !accept.includes("text/html");
+      if (!wantsJson) {
+        const head = await deps.ledger.head();
+        const html = landingHtml(url.origin, deps.cfg, labelsOf(deps.cfg), deps.adapters, deps.keys.publicKeyHex, head ? { seq: head.seq, hash: head.hash } : null);
+        return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...CORS } });
+      }
+      return json(200, manifest(deps, url.origin, await deps.ledger.head()));
+    }
+    if (path === "/.well-known/truth.json") return json(200, manifest(deps, url.origin, await deps.ledger.head()));
+    if (path === "/.well-known/agent.json") return json(200, agentCard(url.origin, deps.cfg, labelsOf(deps.cfg), deps.adapters, deps.keys.publicKeyHex));
     if (path === "/health") {
       const head = await deps.ledger.head();
       return json(200, { ok: true, entries: await deps.ledger.length(), head_seq: head?.seq ?? null, head_hash: head?.hash ?? null, paid_routes: !deps.cfg.disabledReason });
@@ -365,7 +377,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     if (path === "/.well-known/x402") return json(200, wellKnownX402(deps.cfg, url.origin, deps.adapters));
     if (path === "/openapi.json") return json(200, openapiJson(url.origin, deps.adapters, labelsOf(deps.cfg)));
     if (path === "/llms.txt") return new Response(llmsTxt(url.origin, deps.adapters, labelsOf(deps.cfg)), { headers: { "content-type": "text/plain; charset=utf-8", ...CORS } });
-    if (path === "/.well-known/security.txt") {
+    if (path === "/.well-known/security.txt" || path === "/security.txt") {
       if (!deps.cfg.securityContact) return json(404, { refused: "SECURITY_CONTACT not configured" });
       return new Response(securityTxt(deps.cfg.securityContact, url.origin), { headers: { "content-type": "text/plain; charset=utf-8", ...CORS } });
     }

@@ -21,6 +21,9 @@
     "packages/gateway/src/app.ts",
     "packages/gateway/src/x402.ts",
     "packages/gateway/src/config.ts",
+    "packages/gateway/src/discovery.ts",
+    "packages/gateway/src/landing.ts",
+    "packages/gateway/src/claims.ts",
     "packages/gateway/test/**/*.ts",
     "scripts/**/*.ts"
   ]

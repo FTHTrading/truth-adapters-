@@ -29,3 +29,8 @@
   the test spawns `git init`/`commit` in a fresh temp dir with an explicit
   identity env. Suspect a Windows temp-dir or spawn timing race. Capture the
   assertion on next occurrence; consider `--test-concurrency=1` for that file.
+- **Never probe a production ledger** (2026-09-13 incident, see
+  `.forge/ship-receipt-genesis402-v1.md`). A trigger test inserted a permanent
+  invalid row into the first production D1; the database was abandoned for a
+  fresh one. Add to `/health`: `genesis_ok` = first row has `seq 0` and
+  `prev` all zeros; move the trigger exercise to `wrangler d1 execute --local`.
