@@ -44,6 +44,7 @@ import {
   facilitatorSettle,
   facilitatorVerify,
   settlementReference,
+  type FacilitatorHeaders,
   type PaymentRequirements,
 } from "./x402.ts";
 
@@ -57,6 +58,8 @@ export interface Deps {
   kernelVersion: string;
   /** Published JSON schemas served at /schema/<name>. */
   schemas?: Readonly<Record<string, unknown>>;
+  /** Auth headers for an authenticated facilitator (CDP). Absent for the public testnet facilitator. */
+  facilitatorHeaders?: FacilitatorHeaders;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -228,14 +231,14 @@ async function witnessRoute(req: Request, deps: Deps, url: URL, adapterName: str
     if (!decoded.ok) return paymentRequired(reqs, deps, decoded.reason);
     let verify;
     try {
-      verify = await facilitatorVerify(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs);
+      verify = await facilitatorVerify(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs, deps.facilitatorHeaders);
     } catch (err) {
       return json(502, { refused: `facilitator unreachable: ${err instanceof Error ? err.message : String(err)}` });
     }
     if (!verify.isValid) return paymentRequired(reqs, deps, verify.invalidReason ?? "payment invalid");
     let settle;
     try {
-      settle = await facilitatorSettle(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs);
+      settle = await facilitatorSettle(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs, deps.facilitatorHeaders);
     } catch (err) {
       return json(502, { refused: `facilitator unreachable: ${err instanceof Error ? err.message : String(err)}` });
     }

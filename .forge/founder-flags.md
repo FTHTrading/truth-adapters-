@@ -90,3 +90,14 @@ surface (manifest is public once deployed; playbook posts are public).
 ## RESOLVED FLAGS
 
 _(none yet)_
+
+### F-3, amendment 2026-09-13 — mainnet is now two secrets and one variable
+The gateway supports the Coinbase (CDP) facilitator with per-request JWT auth. To go live on Base mainnet:
+```powershell
+cd C:\Users\Kevan\truth-adapters
+npx wrangler secret put CDP_API_KEY_ID -c packages\gateway\wrangler.jsonc       # paste when prompted
+npx wrangler secret put CDP_API_KEY_SECRET -c packages\gateway\wrangler.jsonc
+# in packages/gateway/wrangler.jsonc: "X402_NETWORK": "base", "X402_FACILITATOR_URL": ""
+pnpm gateway:deploy; node scripts\verify-served.ts https://genesis402.com
+```
+Fail-safe: `X402_NETWORK=base` without both secrets keeps paid routes at 503. UNVERIFIED until the first live call: that the CDP `/platform/v2/x402` endpoints accept x402Version 1 payloads (they did for the original SDK; x402 v2 wire support is the next task if not), and the USDC EIP-712 domain name `USD Coin` / version `2` on Base.

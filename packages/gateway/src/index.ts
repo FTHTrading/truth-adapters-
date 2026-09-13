@@ -10,6 +10,7 @@ import { importKeysJwk, monotonic, type WitnessKeys } from "../../kernel/src/ind
 import { handle, runAnchor, type Deps } from "./app.ts";
 import { configFromEnv, type EnvLike } from "./config.ts";
 import { D1Ledger } from "./ledger-d1.ts";
+import { createCdpAuthHeaders } from "@coinbase/x402";
 import recordSchema from "../../../docs/schema/truth-record-v1.schema.json";
 import attestationSchema from "../../../docs/schema/truth-attestation-v1.schema.json";
 
@@ -21,6 +22,20 @@ const SCHEMAS: Readonly<Record<string, unknown>> = Object.freeze({
 export interface Env extends EnvLike {
   LEDGER: D1Database;
   WITNESS_PRIVATE_KEY_JWK?: string;
+}
+
+/**
+ * CDP facilitator auth: a bearer JWT minted per request from the CDP key secrets.
+ * Only constructed when both secrets exist; the secrets are read here and nowhere else.
+ */
+function facilitatorHeadersFrom(env: Env) {
+  if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) return undefined;
+  const make = createCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
+  if (!make) return undefined;
+  return async () => {
+    const h = await make();
+    return { verify: h.verify as Record<string, string>, settle: h.settle as Record<string, string> };
+  };
 }
 
 const KERNEL_VERSION = "0.1.0";
@@ -50,6 +65,7 @@ async function deps(env: Env): Promise<Deps> {
     clock,
     kernelVersion: KERNEL_VERSION,
     schemas: SCHEMAS,
+    facilitatorHeaders: facilitatorHeadersFrom(env),
   };
 }
 

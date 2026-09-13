@@ -10,6 +10,8 @@ file. A label changes only when the evidence in the right-hand column changes.
 | Gateway Worker | `DEPLOYED_PREVIEW` | `truth-gateway.kevanbtc.workers.dev`, verify-served PASS 14/14; genesis402.com cut-over blocked on a route held by `genesis402-apex` (ship receipt) |
 | D1 append-only triggers | `DEPLOYED_EXERCISED` | `truth-ledger-v1`; UPDATE and DELETE abort with `SQLITE_CONSTRAINT_TRIGGER` (exercised on the abandoned `truth-ledger`, see ship receipt) |
 | x402 settlement (USDC) | `DRY_RUN` | Base Sepolia via x402.org facilitator; pay-to = UnyKorn treasury; no paid round-trip exercised yet (needs a funded Sepolia payer key) |
+| Mainnet settlement via Coinbase (CDP) facilitator | `IMPLEMENTED_NOT_CONFIGURED` | per-request JWT auth wired and tested with a mock; needs `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` secrets and `X402_NETWORK=base` (founder flag F-3); fail-safe keeps paid routes at 503 without them |
+| genesis402.com cut-over | `BLOCKED_ON_FOUNDER` | config ready on path 2; deploy blocked by the auto-mode classifier twice; three commands in the ship receipt |
 | Apostle ATP rail | `PENDING_CONFIGURATION` | verify call shape reused from UnyKorn-X402-aws; not called live |
 | Mode | `test` when `X402_NETWORK=base-sepolia`, `live` only on `base`, `local` for file ledgers | `packages/gateway/src/config.ts` |
 | Anchoring | `UNANCHORED` externally | merkle anchors are internal ledger records signed by the same key; no OTS/TSA/chain anchor |

@@ -40,7 +40,13 @@ export interface X402Config {
   facilitatorUrl: string;
   payTo: string;
   maxTimeoutSeconds: number;
+  /** "cdp" when the Coinbase facilitator is used with per-request JWT auth; "public" otherwise. */
+  facilitatorKind: "cdp" | "public";
 }
+
+/** Coinbase Developer Platform x402 facilitator (mainnet). Per-request bearer JWT from a CDP key. */
+export const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+export const PUBLIC_TESTNET_FACILITATOR_URL = "https://x402.org/facilitator";
 
 export interface ApostleConfig {
   facilitatorUrl: string;
@@ -67,6 +73,9 @@ export interface EnvLike {
   APOSTLE_PRICE_ATP_RAW?: string;
   /** mailto: or https: contact for /.well-known/security.txt; route is 404 when unset. */
   SECURITY_CONTACT?: string;
+  /** Secrets. Presence enables the CDP facilitator; values are never read anywhere but the JWT signer. */
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
 }
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -78,10 +87,16 @@ export function configFromEnv(env: EnvLike): GatewayConfig {
   if (!net) problems.push(`X402_NETWORK must be one of ${Object.keys(X402_NETWORKS).join(", ")}`);
   const payTo = (env.X402_PAY_TO ?? "").trim();
   if (!/^0x[0-9a-fA-F]{40}$/.test(payTo) || payTo.toLowerCase() === ZERO) problems.push("X402_PAY_TO must be a real EVM address");
-  const facilitatorUrl = (env.X402_FACILITATOR_URL ?? "").replace(/\/$/, "");
+  const hasCdp = !!(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET);
+  let facilitatorUrl = (env.X402_FACILITATOR_URL ?? "").replace(/\/$/, "");
+  if (!facilitatorUrl) facilitatorUrl = hasCdp ? CDP_FACILITATOR_URL : PUBLIC_TESTNET_FACILITATOR_URL;
   if (!/^https:\/\//.test(facilitatorUrl)) problems.push("X402_FACILITATOR_URL must be https");
+  const facilitatorKind: X402Config["facilitatorKind"] = facilitatorUrl.startsWith("https://api.cdp.coinbase.com") ? "cdp" : "public";
+  if (facilitatorKind === "cdp" && !hasCdp) problems.push("CDP facilitator requires CDP_API_KEY_ID and CDP_API_KEY_SECRET secrets");
+  // Fail-safe: mainnet settles only through an authenticated facilitator. The public testnet facilitator never settles mainnet.
+  if (net?.network === "base" && facilitatorKind !== "cdp") problems.push("X402_NETWORK=base requires the CDP facilitator (set CDP_API_KEY_ID / CDP_API_KEY_SECRET)");
   if (net && problems.length === 0) {
-    x402 = { network: net, facilitatorUrl, payTo, maxTimeoutSeconds: Number(env.X402_MAX_TIMEOUT_SECONDS ?? "60") || 60 };
+    x402 = { network: net, facilitatorUrl, payTo, maxTimeoutSeconds: Number(env.X402_MAX_TIMEOUT_SECONDS ?? "60") || 60, facilitatorKind };
   }
 
   let apostle: ApostleConfig | null = null;

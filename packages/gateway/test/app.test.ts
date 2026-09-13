@@ -331,6 +331,32 @@ test("entries paging and health", async () => {
   assert.equal(h.head_seq, 8);
 });
 
+test("mainnet without CDP credentials keeps paid routes disabled; with them the CDP facilitator is selected", async () => {
+  const noCreds = configFromEnv({ X402_NETWORK: "base", X402_PAY_TO: PAY_TO, X402_FACILITATOR_URL: "" });
+  assert.match(noCreds.disabledReason ?? "", /CDP/);
+  const withCreds = configFromEnv({ X402_NETWORK: "base", X402_PAY_TO: PAY_TO, X402_FACILITATOR_URL: "", CDP_API_KEY_ID: "id", CDP_API_KEY_SECRET: "secret" });
+  assert.equal(withCreds.disabledReason, null);
+  assert.equal(withCreds.x402?.facilitatorKind, "cdp");
+  assert.equal(withCreds.x402?.facilitatorUrl, "https://api.cdp.coinbase.com/platform/v2/x402");
+  const testnet = configFromEnv({ X402_NETWORK: "base-sepolia", X402_PAY_TO: PAY_TO, X402_FACILITATOR_URL: "" });
+  assert.equal(testnet.x402?.facilitatorKind, "public");
+});
+
+test("facilitator auth headers are sent on verify and settle when a provider is configured", async () => {
+  const fac = goodFacilitator();
+  const seen: string[] = [];
+  const deps = await makeDeps(fac);
+  const inner = deps.fetch;
+  deps.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).startsWith("https://facilitator.test/")) seen.push(String((init?.headers as Record<string, string>)["Authorization"] ?? "none"));
+    return inner(input, init);
+  }) as typeof fetch;
+  deps.facilitatorHeaders = async () => ({ verify: { Authorization: "Bearer v-jwt" }, settle: { Authorization: "Bearer s-jwt" } });
+  const res = await post(deps, "/witness/document", { sha256: HELLO_SHA }, { "x-payment": paymentHeader() });
+  assert.equal(res.status, 200);
+  assert.deepEqual(seen, ["Bearer v-jwt", "Bearer s-jwt"]);
+});
+
 test("zero pay-to address keeps paid routes disabled (fail-safe default)", async () => {
   const deps = await makeDeps(goodFacilitator(), WORKER_ADAPTERS, { X402_PAY_TO: "0x0000000000000000000000000000000000000000", APOSTLE_FACILITATOR_URL: "", APOSTLE_PRICE_ATP_RAW: "" });
   assert.match(deps.cfg.disabledReason ?? "", /X402_PAY_TO/);

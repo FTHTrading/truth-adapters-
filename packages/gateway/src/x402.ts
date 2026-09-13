@@ -108,18 +108,39 @@ export function decodePaymentHeader(header: string, reqs: PaymentRequirements): 
   return { ok: true, payload: p as PaymentPayload };
 }
 
-async function postJson<T>(fetchFn: typeof fetch, url: string, body: unknown): Promise<T> {
-  const res = await fetchFn(url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) });
+/** Per-request headers for an authenticated facilitator (CDP mints a bearer JWT per call). */
+export type FacilitatorHeaders = () => Promise<{ verify: Record<string, string>; settle: Record<string, string> }>;
+
+async function postJson<T>(fetchFn: typeof fetch, url: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
+  const res = await fetchFn(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(`facilitator ${res.status} at ${new URL(url).pathname}`);
   return (await res.json()) as T;
 }
 
-export function facilitatorVerify(fetchFn: typeof fetch, facilitatorUrl: string, paymentPayload: PaymentPayload, paymentRequirements: PaymentRequirements): Promise<VerifyResponse> {
-  return postJson<VerifyResponse>(fetchFn, `${facilitatorUrl}/verify`, { x402Version: 1, paymentPayload, paymentRequirements });
+export async function facilitatorVerify(
+  fetchFn: typeof fetch,
+  facilitatorUrl: string,
+  paymentPayload: PaymentPayload,
+  paymentRequirements: PaymentRequirements,
+  headers?: FacilitatorHeaders,
+): Promise<VerifyResponse> {
+  const h = headers ? (await headers()).verify : {};
+  return postJson<VerifyResponse>(fetchFn, `${facilitatorUrl}/verify`, { x402Version: 1, paymentPayload, paymentRequirements }, h);
 }
 
-export function facilitatorSettle(fetchFn: typeof fetch, facilitatorUrl: string, paymentPayload: PaymentPayload, paymentRequirements: PaymentRequirements): Promise<SettleResponse> {
-  return postJson<SettleResponse>(fetchFn, `${facilitatorUrl}/settle`, { x402Version: 1, paymentPayload, paymentRequirements });
+export async function facilitatorSettle(
+  fetchFn: typeof fetch,
+  facilitatorUrl: string,
+  paymentPayload: PaymentPayload,
+  paymentRequirements: PaymentRequirements,
+  headers?: FacilitatorHeaders,
+): Promise<SettleResponse> {
+  const h = headers ? (await headers()).settle : {};
+  return postJson<SettleResponse>(fetchFn, `${facilitatorUrl}/settle`, { x402Version: 1, paymentPayload, paymentRequirements }, h);
 }
 
 export function encodePaymentResponse(settle: SettleResponse): string {
