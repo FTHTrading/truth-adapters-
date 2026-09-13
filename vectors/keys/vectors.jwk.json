@@ -1,0 +1,11 @@
+{
+  "key_ops": [
+    "sign"
+  ],
+  "ext": true,
+  "alg": "Ed25519",
+  "crv": "Ed25519",
+  "d": "0IejQZKbtEWQfNATTevFH79hqZdjPzg2dXRNug-Lp-w",
+  "x": "qHP8LAG4oTTBXXvwzUbwR_RvNaUBkbreGGIhXxIsYAo",
+  "kty": "OKP"
+}

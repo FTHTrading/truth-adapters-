@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "truth-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["0 * * * *"] },
+  "d1_databases": [
+    {
+      "binding": "LEDGER",
+      "database_name": "truth-ledger",
+      // Set after `wrangler d1 create truth-ledger` (ship receipt step 1). Deploy fails until then.
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "vars": {
+    "SERVICE_NAME": "truth-gateway",
+    // Testnet by default. Mainnet ("base") + CDP facilitator is founder flag F-3.
+    "X402_NETWORK": "base-sepolia",
+    "X402_FACILITATOR_URL": "https://x402.org/facilitator",
+    // Fail-safe: the zero address keeps paid routes DISABLED (503) until a real pay-to is set.
+    "X402_PAY_TO": "0x0000000000000000000000000000000000000000",
+    "X402_MAX_TIMEOUT_SECONDS": "60",
+    "APOSTLE_FACILITATOR_URL": "https://x402.unykorn.org",
+    // 0.25 ATP (18 decimals), matching the PASS Basic per-op price in UnyKorn-X402-aws.
+    "APOSTLE_PRICE_ATP_RAW": "250000000000000000"
+  }
+}

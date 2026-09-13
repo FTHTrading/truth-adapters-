@@ -1,0 +1,39 @@
+{
+  "name": "truth-adapters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Translation-only adapters, x402-gated witness gateway, verifier and agent tooling on top of the frozen truth substrate (kevanbtc/truth v1.0.0).",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@11.0.8",
+  "scripts": {
+    "test": "node --test \"packages/**/test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/gateway/tsconfig.json",
+    "check": "pnpm typecheck && pnpm test",
+    "demo": "node scripts/demo.ts",
+    "keygen": "node scripts/keygen.ts",
+    "verify": "node packages/verify/src/cli.ts",
+    "vectors": "node scripts/vectors.ts",
+    "vectors:check": "node scripts/vectors.ts --check",
+    "fresh-check": "pwsh -NoProfile -File scripts/fresh-check.ps1",
+    "mcp": "node packages/mcp/src/server.ts",
+    "gateway:dev": "wrangler dev -c packages/gateway/wrangler.jsonc",
+    "gateway:migrate:local": "wrangler d1 execute truth-ledger --local -c packages/gateway/wrangler.jsonc --file packages/gateway/schema.sql",
+    "gateway:migrate:remote": "wrangler d1 execute truth-ledger --remote -c packages/gateway/wrangler.jsonc --file packages/gateway/schema.sql",
+    "gateway:deploy": "wrangler deploy -c packages/gateway/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250913.0",
+    "@types/node": "^24.3.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.1",
+    "viem": "^2.37.5",
+    "zod": "^3.25.76"
+  }
+}

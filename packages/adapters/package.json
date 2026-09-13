@@ -1,0 +1,11 @@
+{
+  "name": "@truth/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Translation-only domain adapters for the truth substrate. They map external systems to observations. They add no rules.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/registry-node.ts"
+  }
+}

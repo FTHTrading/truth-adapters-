@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FTHTrading/truth-adapters/docs/schema/truth-record-v1.schema.json",
+  "title": "truth-record-v1",
+  "description": "One ledger entry of a truth-adapters ledger. FROZEN 2026-09-13. Amend only by a v2 schema and a superseding ADR.",
+  "type": "object",
+  "required": ["seq", "prev", "ts", "record", "hash"],
+  "additionalProperties": false,
+  "properties": {
+    "seq": { "type": "integer", "minimum": 0 },
+    "prev": { "$ref": "#/$defs/hex64", "description": "hash of entry seq-1; 64 zeros at genesis" },
+    "ts": { "type": "integer", "minimum": 0, "description": "unix milliseconds, monotonic per ledger" },
+    "hash": { "$ref": "#/$defs/hex64", "description": "sha256(canonical{seq,prev,ts,record})" },
+    "record": {
+      "oneOf": [
+        { "$ref": "#/$defs/EVENT" },
+        { "$ref": "#/$defs/REFUSED" },
+        { "$ref": "#/$defs/REJECTED" },
+        { "$ref": "#/$defs/FINALIZED" },
+        { "$ref": "#/$defs/MACHINE" },
+        { "$ref": "#/$defs/ANCHOR" }
+      ]
+    }
+  },
+  "$defs": {
+    "hex64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "hex128": { "type": "string", "pattern": "^[0-9a-f]{128}$" },
+    "event": {
+      "type": "object",
+      "required": ["id", "type", "ts", "witness", "payload"],
+      "properties": {
+        "id": { "$ref": "#/$defs/hex64", "description": "sha256(canonical{type,ts,witness,payload})" },
+        "type": { "enum": ["OBSERVED", "FAILED", "REFUSED"] },
+        "ts": { "type": "integer", "minimum": 0 },
+        "witness": { "type": "string", "minLength": 1 },
+        "payload": {},
+        "sig": { "$ref": "#/$defs/hex128", "description": "ed25519 over id" },
+        "pub": { "$ref": "#/$defs/hex64", "description": "raw ed25519 public key" }
+      },
+      "dependentRequired": { "sig": ["pub"], "pub": ["sig"] },
+      "additionalProperties": false
+    },
+    "cost": {
+      "type": "object",
+      "required": ["rail", "asset", "amount", "payer", "reference", "witnessed_event_id"],
+      "properties": {
+        "rail": { "type": "string", "minLength": 1 },
+        "asset": { "type": "string", "minLength": 1 },
+        "amount": { "type": "string", "pattern": "^[0-9]+$", "description": "atomic units, integer string, never float" },
+        "payer": { "type": "string", "minLength": 1 },
+        "reference": { "type": "string", "minLength": 1 },
+        "witnessed_event_id": { "$ref": "#/$defs/hex64" }
+      },
+      "additionalProperties": false
+    },
+    "EVENT": {
+      "type": "object",
+      "required": ["kind", "event"],
+      "properties": { "kind": { "const": "EVENT" }, "event": { "$ref": "#/$defs/event" } },
+      "additionalProperties": false
+    },
+    "REFUSED": {
+      "type": "object",
+      "required": ["kind", "ts", "witness", "reason"],
+      "properties": { "kind": { "const": "REFUSED" }, "ts": { "type": "integer" }, "witness": { "type": "string" }, "reason": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "REJECTED": {
+      "type": "object",
+      "required": ["kind", "ts", "reference", "reason"],
+      "properties": { "kind": { "const": "REJECTED" }, "ts": { "type": "integer" }, "reference": { "$ref": "#/$defs/hex64" }, "reason": { "type": "string" } },
+      "additionalProperties": false
+    },
+    "FINALIZED": {
+      "type": "object",
+      "required": ["kind", "ts", "claimant", "reference", "cost"],
+      "properties": {
+        "kind": { "const": "FINALIZED" },
+        "ts": { "type": "integer" },
+        "claimant": { "type": "string", "minLength": 1 },
+        "reference": { "$ref": "#/$defs/hex64" },
+        "cost": { "$ref": "#/$defs/cost" }
+      },
+      "additionalProperties": false
+    },
+    "MACHINE": {
+      "type": "object",
+      "required": ["kind", "machine_id", "ts"],
+      "properties": { "kind": { "const": "MACHINE" }, "machine_id": { "type": "string" }, "ts": { "type": "integer" } },
+      "additionalProperties": true
+    },
+    "ANCHOR": {
+      "type": "object",
+      "required": ["kind", "merkle_root", "entries", "head_hash", "ts"],
+      "properties": {
+        "kind": { "const": "ANCHOR" },
+        "merkle_root": { "$ref": "#/$defs/hex64" },
+        "entries": { "type": "integer", "minimum": 1 },
+        "head_hash": { "$ref": "#/$defs/hex64" },
+        "ts": { "type": "integer" },
+        "witness": { "type": "string" },
+        "pub": { "$ref": "#/$defs/hex64" },
+        "external": { "type": "object", "description": "reserved for OTS/TSA/chain proofs; absent means UNANCHORED" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@truth/kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hardened runtime binding of the frozen truth substrate: canonical hashing, hash-chained append-only ledger, Ed25519 witnesses, witnessed cost, merkle anchoring.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./file": "./src/ledger-file.ts"
+  }
+}

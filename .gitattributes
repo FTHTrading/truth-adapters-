@@ -1,0 +1,11 @@
+# LF everywhere, on every platform. Vectors and schemas are compared byte-for-byte;
+# a CRLF checkout would make `pnpm vectors:check` fail on Windows clones.
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.ts text eol=lf
+*.md text eol=lf
+*.png binary
+*.jpg binary
+*.wasm binary

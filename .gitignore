@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.wrangler/
+/keys/
+*.jwk.json
+# Test-only vector keys are committed on purpose (vectors/README.md); a real witness key never lives here.
+!vectors/keys/*.jwk.json
+data/*.jsonl
+data/anchor.json
+.env
+.env.*
+!.env.example
+.DS_Store

@@ -1,0 +1,8 @@
+{
+  "name": "@truth/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that gives an agent exactly five tools: read a gateway manifest, pay-and-witness through x402, verify an entry, witness locally (unpaid → OBSERVED only), verify a ledger file.",
+  "bin": { "truth-mcp": "./src/server.ts" }
+}

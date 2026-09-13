@@ -1,0 +1,7 @@
+{
+  "name": "@truth/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "x402-gated witness gateway (Cloudflare Worker + D1). Agents pay per observation; the settlement is the stake."
+}

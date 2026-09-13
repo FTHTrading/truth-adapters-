@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FTHTrading/truth-adapters/docs/schema/truth-attestation-v1.schema.json",
+  "title": "truth-attestation-v1",
+  "description": "Response of POST /witness/{adapter} after a settled payment. FROZEN 2026-09-13. labels and limitations are mandatory on every attestation.",
+  "type": "object",
+  "required": ["schema", "outcome", "labels", "limitations", "witness", "witness_public_key", "reason", "event", "entry", "finalization", "rejection", "cost", "verify", "anchor"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "truth-attestation-v1" },
+    "outcome": { "enum": ["FINALIZED", "OBSERVED", "REFUSED", "REJECTED"] },
+    "labels": { "$ref": "#/$defs/labels" },
+    "limitations": { "type": "string", "minLength": 50 },
+    "witness": { "type": "string" },
+    "witness_public_key": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "reason": { "type": ["string", "null"] },
+    "event": { "oneOf": [{ "type": "null" }, { "$ref": "truth-record-v1.schema.json#/$defs/event" }] },
+    "entry": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/entryRef" }] },
+    "finalization": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/entryRef" }] },
+    "rejection": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/entryRef" }] },
+    "cost": { "$ref": "truth-record-v1.schema.json#/$defs/cost" },
+    "verify": { "type": ["string", "null"], "format": "uri" },
+    "anchor": { "type": "string", "format": "uri" }
+  },
+  "$defs": {
+    "labels": {
+      "type": "object",
+      "required": ["mode", "status", "anchoring", "review"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["local", "test", "live"] },
+        "status": { "enum": ["DRY_RUN", "LIVE_LIMITED", "PENDING_CONFIGURATION", "NOT_OFFERED"] },
+        "anchoring": { "enum": ["UNANCHORED", "ANCHORED"] },
+        "review": { "enum": ["LOCAL_VERIFIED", "EXTERNALLY_REVIEWED"] }
+      }
+    },
+    "entryRef": {
+      "type": "object",
+      "required": ["seq", "hash", "prev", "ts"],
+      "additionalProperties": false,
+      "properties": {
+        "seq": { "type": "integer", "minimum": 0 },
+        "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "prev": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "ts": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@truth/verify",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only verifier: checks chain integrity, event signatures and anchors of a ledger file or a live gateway. Exit code 1 on any defect.",
+  "bin": { "truth-verify": "./src/cli.ts" }
+}

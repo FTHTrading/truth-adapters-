@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "packages/kernel/**/*.ts",
+    "packages/adapters/**/*.ts",
+    "packages/verify/**/*.ts",
+    "packages/mcp/**/*.ts",
+    "packages/gateway/src/app.ts",
+    "packages/gateway/src/x402.ts",
+    "packages/gateway/src/config.ts",
+    "packages/gateway/test/**/*.ts",
+    "scripts/**/*.ts"
+  ]
+}

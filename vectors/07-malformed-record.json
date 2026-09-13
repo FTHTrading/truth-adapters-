@@ -1,0 +1,344 @@
+{
+  "name": "07-malformed-record",
+  "description": "document EVENT at seq 1 missing event.ts, chain rehashed so only the structural check can catch it",
+  "expected": {
+    "ok": false,
+    "structure_bad": 1
+  },
+  "entries": [
+    {
+      "seq": 0,
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "ts": 1700000003000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "a50d8de5e61a8da7495b934dc78c7392a358a4a514ff62618a5bfbd9ba8634bb",
+          "type": "OBSERVED",
+          "ts": 1700000002000,
+          "witness": "COST:x402:exact:base-sepolia",
+          "payload": {
+            "rail": "x402:exact:base-sepolia",
+            "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            "amount": "1000",
+            "payer": "0x2222222222222222222222222222222222222222",
+            "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "settled_at": 1700000001000
+          },
+          "sig": "a2a40309f356a21fa6e4c4826e3df9b4fc8be516eea9c48d69dc3dbdbbea9402b55c78f1761802f676650bf5f71157b84f807d6687a8364a32abdd6f9721760b",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "ae87c5fdd7d10f46ae620e023c5def4c888bada021221aefe49d0643fabd94fa"
+    },
+    {
+      "seq": 1,
+      "prev": "ae87c5fdd7d10f46ae620e023c5def4c888bada021221aefe49d0643fabd94fa",
+      "ts": 1700000005000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "1a0addd94694a36761dfd6e7029861d2ed263acefa076217e1040d26e7174421",
+          "type": "OBSERVED",
+          "witness": "ADAPTER:document@1.0.0",
+          "payload": {
+            "kind": "document",
+            "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            "bytes": 5,
+            "media_type": "text/plain",
+            "name": "hello.txt",
+            "submitted_by": null
+          },
+          "sig": "43a8c87f73a2aa665766ce25b9f3763edb4312ca47aa52224c2314d86a93c9d4b729ad6e4512f95f3767f44956236673d40438a850b114b313ee632fa806af0a",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "52f1533241b8537d725cbbfb51cd91d20c3f5d11f962cdbc158fe28d79e69cf7"
+    },
+    {
+      "seq": 2,
+      "prev": "52f1533241b8537d725cbbfb51cd91d20c3f5d11f962cdbc158fe28d79e69cf7",
+      "ts": 1700000007000,
+      "record": {
+        "kind": "FINALIZED",
+        "ts": 1700000006000,
+        "claimant": "0x2222222222222222222222222222222222222222",
+        "reference": "1a0addd94694a36761dfd6e7029861d2ed263acefa076217e1040d26e7174421",
+        "cost": {
+          "rail": "x402:exact:base-sepolia",
+          "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+          "amount": "1000",
+          "payer": "0x2222222222222222222222222222222222222222",
+          "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "witnessed_event_id": "a50d8de5e61a8da7495b934dc78c7392a358a4a514ff62618a5bfbd9ba8634bb"
+        }
+      },
+      "hash": "ddddaadb9106eef54774aa658f32a148e71dc28874267ecb6e91fd777e0f73ba"
+    },
+    {
+      "seq": 3,
+      "prev": "ddddaadb9106eef54774aa658f32a148e71dc28874267ecb6e91fd777e0f73ba",
+      "ts": 1700000010000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "f259a7e9aebce32251cc8e30320a386512472d3b5ef3f5986a85df38bd9358f2",
+          "type": "OBSERVED",
+          "ts": 1700000009000,
+          "witness": "COST:x402:exact:base-sepolia",
+          "payload": {
+            "rail": "x402:exact:base-sepolia",
+            "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            "amount": "1000",
+            "payer": "0x2222222222222222222222222222222222222222",
+            "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "settled_at": 1700000008000
+          },
+          "sig": "393cb5766a2546165ab612d328b3a94842102d8443f073b115b07be435066bdd13775da99b810f8ec47995b3e365fd05bf82650cc4859ed75485a726dd2ca30a",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "35418cad60667e4ba0ee270c83535a0a3ea356b53dd36a9ac2e23e2a4084df49"
+    },
+    {
+      "seq": 4,
+      "prev": "35418cad60667e4ba0ee270c83535a0a3ea356b53dd36a9ac2e23e2a4084df49",
+      "ts": 1700000012000,
+      "record": {
+        "kind": "REFUSED",
+        "ts": 1700000011000,
+        "witness": "SILENT",
+        "reason": "No observable event"
+      },
+      "hash": "30bd69eee058d271a86134accf41faa105371e4fb4dca09e4cce37362d844cb4"
+    },
+    {
+      "seq": 5,
+      "prev": "30bd69eee058d271a86134accf41faa105371e4fb4dca09e4cce37362d844cb4",
+      "ts": 1700000015000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "b77dfe7ceafae4581f965dfd4c631c9f9aae9b69e070ce7d899ca99e6ae65556",
+          "type": "OBSERVED",
+          "ts": 1700000014000,
+          "witness": "COST:x402:exact:base-sepolia",
+          "payload": {
+            "rail": "x402:exact:base-sepolia",
+            "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            "amount": "0",
+            "payer": "0x2222222222222222222222222222222222222222",
+            "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "settled_at": 1700000013000
+          },
+          "sig": "44984cfe718b130a4b1a92c978bb4455ddcf0e3f337a4b528e41a2eb8d4c0109a1a406f98382bca7144bfd7ca8568cb4c76f3197cbd8581d8b40616997f14601",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "ec183febe1f2b1e0738419e3ce87128df567b824ab471c955a1cc997647e6941"
+    },
+    {
+      "seq": 6,
+      "prev": "ec183febe1f2b1e0738419e3ce87128df567b824ab471c955a1cc997647e6941",
+      "ts": 1700000017000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "00d1371a6fcb1a73b5daf9993f3cd47623fbaafc942b9d0f31f6aefde39b4cf1",
+          "type": "OBSERVED",
+          "ts": 1700000016000,
+          "witness": "ADAPTER:document@1.0.0",
+          "payload": {
+            "kind": "document",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bytes": null,
+            "media_type": null,
+            "name": null,
+            "submitted_by": null
+          },
+          "sig": "fd113458938308f65848bde385b378fc03a53f040f57e5b1a878227e8dcd7de69836468475321248c80f8dc9961620478647d1b7f2f91a104399271f63074803",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "16d8cb1562b3baf04c8fd0d194ddb9762aba92920a1bf68d351d9041c396d626"
+    },
+    {
+      "seq": 7,
+      "prev": "16d8cb1562b3baf04c8fd0d194ddb9762aba92920a1bf68d351d9041c396d626",
+      "ts": 1700000019000,
+      "record": {
+        "kind": "REJECTED",
+        "ts": 1700000018000,
+        "reference": "00d1371a6fcb1a73b5daf9993f3cd47623fbaafc942b9d0f31f6aefde39b4cf1",
+        "reason": "Insufficient cost: stake must be > 0"
+      },
+      "hash": "eca195d76b3e0d59b7ce4d4340602c90460500e8cf4d9d32978c27a4a3b6bcd5"
+    },
+    {
+      "seq": 8,
+      "prev": "eca195d76b3e0d59b7ce4d4340602c90460500e8cf4d9d32978c27a4a3b6bcd5",
+      "ts": 1700000022000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "e69c97862decd215a5e0c752237feb3feb2172d880818be97b1e7d61acfac59f",
+          "type": "OBSERVED",
+          "ts": 1700000021000,
+          "witness": "COST:x402:exact:base-sepolia",
+          "payload": {
+            "rail": "x402:exact:base-sepolia",
+            "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            "amount": "5000",
+            "payer": "0x2222222222222222222222222222222222222222",
+            "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "settled_at": 1700000020000
+          },
+          "sig": "fa03014bb50e8bb90bd46cf76a0201cfb09a38844efefdd2054ac033df9c225585dea209aa4405a00eb131fa84793b04046cd70ee91ad6ea42dfba126116ef04",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "fb02a84eeffe8531548a1c51ec8010a0290bb512d76cc138784670599b510e13"
+    },
+    {
+      "seq": 9,
+      "prev": "fb02a84eeffe8531548a1c51ec8010a0290bb512d76cc138784670599b510e13",
+      "ts": 1700000024000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "d7362c3583c229bbe5fdb9452b559e414933e053dc503ee1601b309729353a0c",
+          "type": "FAILED",
+          "ts": 1700000023000,
+          "witness": "ADAPTER:http-served@1.0.0",
+          "payload": {
+            "error": "upstream 502"
+          },
+          "sig": "15422a9b3f71f1de8ffe740a1f8d7f7fb758d287a85eb95a51caa1ed523058a11c8c2b7bbc1c838b83c1c0a4412a76465e9204be213a1baa0679067ae023080b",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "89c67613d6f32d92666bcab94876cdf337b512e302495025a3fa1bba4c683227"
+    },
+    {
+      "seq": 10,
+      "prev": "89c67613d6f32d92666bcab94876cdf337b512e302495025a3fa1bba4c683227",
+      "ts": 1700000026000,
+      "record": {
+        "kind": "REJECTED",
+        "ts": 1700000025000,
+        "reference": "d7362c3583c229bbe5fdb9452b559e414933e053dc503ee1601b309729353a0c",
+        "reason": "Observation failed; nothing to finalize"
+      },
+      "hash": "efa16907fc7cb3db3c3c00acac42a30ac1b12050ac583df9d9e2657e245d6967"
+    },
+    {
+      "seq": 11,
+      "prev": "efa16907fc7cb3db3c3c00acac42a30ac1b12050ac583df9d9e2657e245d6967",
+      "ts": 1700000029000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "6b55d6aa490b95569bb2fa8588faf587f454b99b2ebbb71218a7d96caf721268",
+          "type": "OBSERVED",
+          "ts": 1700000028000,
+          "witness": "COST:x402:exact:base-sepolia",
+          "payload": {
+            "rail": "x402:exact:base-sepolia",
+            "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+            "amount": "1000",
+            "payer": "0x2222222222222222222222222222222222222222",
+            "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "settled_at": 1700000027000
+          },
+          "sig": "7d07330ead736c93f066e15e3ecb028910390f044277fa8c0747f414ac30cd50c15633363edac2ea1f1f18e4979185f044e7809d2a50bd42baeeefca935cb50d",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "7593e15daea6e10150efcd4cc434a392a943051490a744e89d8d3e1f4b3f6fcc"
+    },
+    {
+      "seq": 12,
+      "prev": "7593e15daea6e10150efcd4cc434a392a943051490a744e89d8d3e1f4b3f6fcc",
+      "ts": 1700000031000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "ec378891e99cc41ba8422c1d10716deccedc8d2f68d340dc7d3f91a5f377fef5",
+          "type": "OBSERVED",
+          "ts": 1700000030000,
+          "witness": "ADAPTER:document@1.0.0",
+          "payload": {
+            "kind": "correction",
+            "references": "5794b97a7fa438b4fd963ce5ca6c95504986cf5565ebcb79753349581ccd10e6",
+            "replacement_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "note_sha256": null,
+            "submitted_by": null
+          },
+          "sig": "b422187f499e7a4826bfc555ed46e56ba041987b00cf47bf957b103e7e8a9675eff24c64e639af090ad08daf2ec1111e3b4e1b0aafff4c8ded94619d43401e0c",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "6174bae06ea93e65d29fa9230c88abd46add04f533c7951b006e54bc6cc4178d"
+    },
+    {
+      "seq": 13,
+      "prev": "6174bae06ea93e65d29fa9230c88abd46add04f533c7951b006e54bc6cc4178d",
+      "ts": 1700000033000,
+      "record": {
+        "kind": "FINALIZED",
+        "ts": 1700000032000,
+        "claimant": "0x2222222222222222222222222222222222222222",
+        "reference": "ec378891e99cc41ba8422c1d10716deccedc8d2f68d340dc7d3f91a5f377fef5",
+        "cost": {
+          "rail": "x402:exact:base-sepolia",
+          "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+          "amount": "1000",
+          "payer": "0x2222222222222222222222222222222222222222",
+          "reference": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "witnessed_event_id": "6b55d6aa490b95569bb2fa8588faf587f454b99b2ebbb71218a7d96caf721268"
+        }
+      },
+      "hash": "857f63c7399d1f8e40b2be04ebab4385ab9ae36ab5e2805eb8ecff6d579df15e"
+    },
+    {
+      "seq": 14,
+      "prev": "857f63c7399d1f8e40b2be04ebab4385ab9ae36ab5e2805eb8ecff6d579df15e",
+      "ts": 1700000035000,
+      "record": {
+        "kind": "ANCHOR",
+        "merkle_root": "2e2bda1f83075415058e075bd683406e4300f8d831e31069fe19c9b5a88852cd",
+        "entries": 14,
+        "head_hash": "a56ebc610b7d4e2926b05d1c447a42a3de87b40f8f370ffdc85cbe3fb84cb879",
+        "ts": 1700000034000,
+        "witness": "ANCHOR:MERKLE",
+        "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+      },
+      "hash": "b31b26a0a5641d3aed6278d7a8e633a2b844255fbdf41212ba93360149aa0aed"
+    },
+    {
+      "seq": 15,
+      "prev": "b31b26a0a5641d3aed6278d7a8e633a2b844255fbdf41212ba93360149aa0aed",
+      "ts": 1700000037000,
+      "record": {
+        "kind": "EVENT",
+        "event": {
+          "id": "8c19c893c21c687d59db7e57494b8ade48703907848f50f19bb9fcc8eafb05cb",
+          "type": "OBSERVED",
+          "ts": 1700000036000,
+          "witness": "ADAPTER:document@1.0.0",
+          "payload": {
+            "kind": "document",
+            "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "bytes": 1,
+            "media_type": null,
+            "name": "after-anchor",
+            "submitted_by": null
+          },
+          "sig": "326b1d2deb285f66dbba3b32280d9453d23f265e36c2551f7fdeaa5e6264487c91058cfff6b90d413de841f72c7aaeef506951778dcaa4cc451973004728ef00",
+          "pub": "a873fc2c01b8a134c15d7bf0cd46f047f46f35a50191bade1862215f122c600a"
+        }
+      },
+      "hash": "52cdc942d833012c34f087424d7e2f22750fb910858b92728c3a078ed49dde89"
+    }
+  ]
+}

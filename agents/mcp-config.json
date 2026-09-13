@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "truth": {
+      "command": "node",
+      "args": ["C:/Users/Kevan/truth-adapters/packages/mcp/src/server.ts"],
+      "env": {
+        "TRUTH_GATEWAY_URL": "http://127.0.0.1:8787",
+        "X402_MAX_ATOMIC": "100000"
+      }
+    }
+  }
+}
