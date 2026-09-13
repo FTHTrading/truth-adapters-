@@ -17,7 +17,7 @@ import { verifyEntries } from "../../verify/src/cli.ts";
 import { LIMITATIONS } from "../../gateway/src/config.ts";
 import { payAndPost, type PayOptions } from "./x402-client.ts";
 
-const DEFAULT_GATEWAY = process.env.TRUTH_GATEWAY_URL ?? "http://127.0.0.1:8787";
+const DEFAULT_GATEWAY = process.env.TRUTH_GATEWAY_URL ?? "https://genesis402.com";
 const LIMITS = " LIMITATIONS: " + LIMITATIONS;
 
 function payOptions(): PayOptions | null {
