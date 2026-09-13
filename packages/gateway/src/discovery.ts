@@ -37,17 +37,23 @@ export function pricingJson(cfg: GatewayConfig, adapters: Readonly<Record<string
 
 export function wellKnownX402(cfg: GatewayConfig, origin: string, adapters: Readonly<Record<string, AdapterSpec>>): unknown {
   const labels = labelsOf(cfg);
+  const x = cfg.x402;
   return {
-    x402Version: 1,
+    x402Version: 2,
     mode: labels.mode === "live" ? "LIVE" : "DRY_RUN",
     disclosure:
       labels.mode === "live"
         ? "Payments settle on mainnet to the pay-to address below."
         : "Payments settle on a test network only. Nothing here carries value. Do not treat a test-mode receipt as a paid record.",
-    accepts: cfg.x402
-      ? [{ scheme: "exact", network: cfg.x402.network.network, asset: cfg.x402.network.asset, payTo: cfg.x402.payTo, facilitator: cfg.x402.facilitatorUrl }]
+    provider: { name: "Genesis402 truth gateway", operator: "UnyKorn LLC (Wyoming)", origin },
+    accepts: x
+      ? [{ scheme: "exact", network: `eip155:${x.network.chainId}`, asset: x.network.asset, payTo: x.payTo, maxTimeoutSeconds: x.maxTimeoutSeconds, extra: { name: x.network.assetName, version: x.network.assetVersion }, facilitator: x.facilitatorUrl }]
       : [],
-    resources: Object.values(adapters).map((a) => ({ resource: `${origin}/witness/${a.name}`, maxAmountRequired: a.price.atomic, description: a.description })),
+    wire: {
+      v2: "402 carries PAYMENT-REQUIRED (base64 JSON); pay with PAYMENT-SIGNATURE; settlement returned in PAYMENT-RESPONSE",
+      v1: "402 body carries {x402Version:1, accepts[]}; pay with X-PAYMENT; settlement returned in X-PAYMENT-RESPONSE",
+    },
+    resources: Object.values(adapters).map((a) => ({ url: `${origin}/witness/${a.name}`, method: "POST", amount: a.price.atomic, description: a.description, observation: a.observation })),
     limitations: LIMITATIONS,
   };
 }

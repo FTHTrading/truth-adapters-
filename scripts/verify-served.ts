@@ -21,6 +21,7 @@ interface Check {
   expectStatus?: number;
   needs?: string[];
   json?: (v: any) => string | null;
+  header?: [name: string, check: (value: string) => string | null];
 }
 
 const checks: Check[] = [
@@ -37,7 +38,7 @@ const checks: Check[] = [
   { path: "/schema/truth-record-v1.schema.json", type: "json", json: (v) => (v.title === "truth-record-v1" ? null : "schema title") },
   { path: "/schema/truth-attestation-v1.schema.json", type: "json", json: (v) => (v.title === "truth-attestation-v1" ? null : "schema title") },
   { path: "/.well-known/security.txt", type: "text", needs: ["Contact:"] },
-  { path: "/witness/document", type: "json", expectStatus: 402, json: (v) => (v.x402Version === 1 && Array.isArray(v.accepts) ? null : "402 body malformed") },
+  { path: "/witness/document", type: "json", expectStatus: 402, json: (v) => (v.x402Version === 1 && Array.isArray(v.accepts) ? null : "402 body malformed"), header: ["payment-required", (h) => { try { return JSON.parse(atob(h)).x402Version === 2 ? null : "PAYMENT-REQUIRED not v2"; } catch { return "PAYMENT-REQUIRED not base64 JSON"; } }] },
 ];
 
 let failures = 0;
@@ -49,11 +50,16 @@ for (const c of checks) {
   let status = 0;
   let ctype = "";
   let text = "";
+  let headerProblem: string | null = null;
   try {
     const res = await fetch(url, init);
     status = res.status;
     ctype = res.headers.get("content-type") ?? "";
     text = await res.text();
+    if (c.header) {
+      const v = res.headers.get(c.header[0]);
+      headerProblem = v ? c.header[1](v) : `missing ${c.header[0]} header`;
+    }
   } catch (err) {
     rows.push(`FAIL ${c.path}  fetch error: ${err instanceof Error ? err.message : String(err)}`);
     failures++;
@@ -73,6 +79,7 @@ for (const c of checks) {
     }
   }
   for (const n of c.needs ?? []) if (!text.includes(n)) problems.push(`missing "${n}"`);
+  if (headerProblem) problems.push(headerProblem);
   const claims = scanClaims(text);
   if (!claims.ok) problems.push(`claims: ${claims.hits.map((h) => h.phrase).join(", ")}`);
   if (problems.length) failures++;

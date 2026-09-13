@@ -111,8 +111,10 @@ test("discovery documents disclose DRY_RUN and carry labels; security.txt is 404
   const deps = await makeDeps(goodFacilitator());
   const x = (await (await get(deps, "/.well-known/x402")).json()) as Record<string, any>;
   assert.equal(x.mode, "DRY_RUN");
+  assert.equal(x.x402Version, 2);
   assert.match(x.disclosure, /test network only/);
-  assert.equal(x.accepts[0].network, "base-sepolia");
+  assert.equal(x.accepts[0].network, "eip155:84532");
+  assert.equal(x.resources[0].amount, "1000");
   const s = (await (await get(deps, "/status.json")).json()) as Record<string, any>;
   assert.equal(s.labels.status, "DRY_RUN");
   const p = (await (await get(deps, "/pricing.json")).json()) as Record<string, any>;
@@ -355,6 +357,87 @@ test("facilitator auth headers are sent on verify and settle when a provider is 
   const res = await post(deps, "/witness/document", { sha256: HELLO_SHA }, { "x-payment": paymentHeader() });
   assert.equal(res.status, 200);
   assert.deepEqual(seen, ["Bearer v-jwt", "Bearer s-jwt"]);
+});
+
+function paymentSignatureHeader(over: Partial<{ payTo: string; amount: string; network: string; asset: string; version: number }> = {}): string {
+  const accepted = {
+    scheme: "exact",
+    network: over.network ?? "eip155:84532",
+    asset: over.asset ?? "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    amount: over.amount ?? "1000",
+    payTo: over.payTo ?? PAY_TO,
+    maxTimeoutSeconds: 60,
+    extra: { name: "USDC", version: "2" },
+  };
+  const payload = {
+    x402Version: over.version ?? 2,
+    resource: { url: "https://gw.test/witness/document" },
+    accepted,
+    payload: { signature: "0x" + "cd".repeat(65), authorization: { from: PAYER, to: accepted.payTo, value: accepted.amount, validAfter: "0", validBefore: "9999999999", nonce: "0x" + "02".repeat(32) } },
+  };
+  return btoa(JSON.stringify(payload));
+}
+
+test("x402 v2: the 402 carries a PAYMENT-REQUIRED header with eip155 network and amount", async () => {
+  const deps = await makeDeps(goodFacilitator());
+  const res = await post(deps, "/witness/document", { sha256: HELLO_SHA });
+  assert.equal(res.status, 402);
+  const hdr = res.headers.get("payment-required");
+  assert.ok(hdr, "PAYMENT-REQUIRED header present");
+  const doc = JSON.parse(atob(hdr!));
+  assert.equal(doc.x402Version, 2);
+  assert.equal(doc.accepts[0].network, "eip155:84532");
+  assert.equal(doc.accepts[0].amount, "1000");
+  assert.equal(doc.accepts[0].payTo, PAY_TO);
+  assert.equal(doc.resource.url, "https://gw.test/witness/document");
+  const body = (await res.json()) as any;
+  assert.equal(body.x402Version, 1, "v1 body still served for v1 clients");
+});
+
+test("x402 v2: PAYMENT-SIGNATURE settles with x402Version 2 sent to the facilitator; PAYMENT-RESPONSE returned", async () => {
+  const fac = goodFacilitator();
+  const versions: number[] = [];
+  fac.verify = (b: any) => { versions.push(b.x402Version); return { isValid: true, payer: PAYER }; };
+  fac.settle = (b: any) => { versions.push(b.x402Version); assert.equal(b.paymentRequirements.amount, "1000"); return { success: true, transaction: "0x" + "ff".repeat(32), network: "eip155:84532", payer: PAYER }; };
+  const deps = await makeDeps(fac);
+  const res = await post(deps, "/witness/document", { sha256: HELLO_SHA }, { "payment-signature": paymentSignatureHeader() });
+  assert.equal(res.status, 200);
+  assert.ok(res.headers.get("payment-response"));
+  assert.equal(res.headers.get("x-payment-response"), null);
+  const body = (await res.json()) as any;
+  assert.equal(body.outcome, "FINALIZED");
+  assert.deepEqual(versions, [2, 2]);
+  assert.equal((deps.ledger.snapshot()[0]!.record as any).event.payload.wire_version, 2);
+});
+
+test("x402 v2: wrong payTo, wrong asset, short amount, or wrong network → 402 before the facilitator", async () => {
+  const fac = goodFacilitator();
+  const deps = await makeDeps(fac);
+  for (const bad of [{ payTo: PAYER }, { asset: "0x" + "11".repeat(20) }, { amount: "999" }, { network: "eip155:8453" }, { version: 1 }]) {
+    const res = await post(deps, "/witness/document", { sha256: HELLO_SHA }, { "payment-signature": paymentSignatureHeader(bad) });
+    assert.equal(res.status, 402, JSON.stringify(bad));
+  }
+  assert.deepEqual(fac.calls, []);
+  assert.equal(await deps.ledger.length(), 0);
+});
+
+test("free reads are rate limited per client; paid routes are not", async () => {
+  const deps = await makeDeps(goodFacilitator());
+  const budget = new Map<string, number>();
+  deps.rateLimit = async (key) => {
+    const n = (budget.get(key) ?? 0) + 1;
+    budget.set(key, n);
+    return n <= 2;
+  };
+  const h = { "cf-connecting-ip": "203.0.113.9" };
+  assert.equal((await handle(new Request("https://gw.test/health", { headers: h }), deps)).status, 200);
+  assert.equal((await handle(new Request("https://gw.test/health", { headers: h }), deps)).status, 200);
+  const third = await handle(new Request("https://gw.test/health", { headers: h }), deps);
+  assert.equal(third.status, 429);
+  assert.equal(third.headers.get("retry-after"), "60");
+  assert.equal((await handle(new Request("https://gw.test/health", { headers: { "cf-connecting-ip": "203.0.113.10" } }), deps)).status, 200, "other clients unaffected");
+  const paid = await post(deps, "/witness/document", { sha256: HELLO_SHA }, { ...h, "x-payment": paymentHeader() });
+  assert.equal(paid.status, 200, "paid route ignores the free-read budget");
 });
 
 test("zero pay-to address keeps paid routes disabled (fail-safe default)", async () => {

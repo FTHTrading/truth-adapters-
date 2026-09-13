@@ -22,6 +22,8 @@ const SCHEMAS: Readonly<Record<string, unknown>> = Object.freeze({
 export interface Env extends EnvLike {
   LEDGER: D1Database;
   WITNESS_PRIVATE_KEY_JWK?: string;
+  /** Workers Rate Limiting binding (wrangler.jsonc `ratelimits`). Optional: absent means unlimited free reads. */
+  FREE_READS?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
 }
 
 /**
@@ -66,6 +68,7 @@ async function deps(env: Env): Promise<Deps> {
     kernelVersion: KERNEL_VERSION,
     schemas: SCHEMAS,
     facilitatorHeaders: facilitatorHeadersFrom(env),
+    rateLimit: env.FREE_READS ? async (key) => (await env.FREE_READS!.limit({ key })).success : undefined,
   };
 }
 

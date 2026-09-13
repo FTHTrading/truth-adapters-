@@ -57,6 +57,59 @@ export interface SettleResponse {
   payer?: string;
 }
 
+/**
+ * x402 v2 (the @x402/core generation, used by current client libraries and by twin.unykorn.org):
+ *   402 response:  header PAYMENT-REQUIRED = base64(JSON PaymentRequiredV2); body keeps the v1 document
+ *   request:       header PAYMENT-SIGNATURE = base64(JSON PaymentPayloadV2)
+ *   response:      header PAYMENT-RESPONSE = base64(JSON SettleResponse)
+ *   networks:      CAIP-2 ids (eip155:8453, eip155:84532); `amount` replaces `maxAmountRequired`
+ */
+export interface PaymentRequirementsV2 {
+  scheme: "exact";
+  network: string; // eip155:<chainId>
+  asset: string;
+  amount: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  extra: { name: string; version: string };
+}
+
+export interface PaymentRequiredV2 {
+  x402Version: 2;
+  error?: string;
+  resource: { url: string; description?: string; mimeType?: string; serviceName?: string };
+  accepts: PaymentRequirementsV2[];
+}
+
+export interface PaymentPayloadV2 {
+  x402Version: 2;
+  resource?: { url: string };
+  accepted: PaymentRequirementsV2;
+  payload: { signature: string; authorization: ExactEvmAuthorization };
+}
+
+export function buildRequirementsV2(cfg: X402Config, amountAtomic: string): PaymentRequirementsV2 {
+  return {
+    scheme: "exact",
+    network: `eip155:${cfg.network.chainId}`,
+    asset: cfg.network.asset,
+    amount: amountAtomic,
+    payTo: cfg.payTo,
+    maxTimeoutSeconds: cfg.maxTimeoutSeconds,
+    extra: { name: cfg.network.assetName, version: cfg.network.assetVersion },
+  };
+}
+
+export function buildPaymentRequiredV2(cfg: X402Config, resourceUrl: string, amountAtomic: string, description: string, error?: string): PaymentRequiredV2 {
+  const doc: PaymentRequiredV2 = {
+    x402Version: 2,
+    resource: { url: resourceUrl, description, mimeType: "application/json", serviceName: "genesis402 truth gateway" },
+    accepts: [buildRequirementsV2(cfg, amountAtomic)],
+  };
+  if (error) doc.error = error;
+  return doc;
+}
+
 export function buildRequirements(cfg: X402Config, resource: string, amountAtomic: string, description: string): PaymentRequirements {
   return {
     scheme: "exact",
@@ -83,6 +136,38 @@ function b64encode(s: string): string {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin);
+}
+
+export function encodeHeader(v: unknown): string {
+  return b64encode(JSON.stringify(v));
+}
+
+export type DecodedV2 = { ok: true; payload: PaymentPayloadV2 } | { ok: false; reason: string };
+
+/** Decodes and checks a v2 PAYMENT-SIGNATURE header against the requirements this gateway advertised. */
+export function decodePaymentSignatureHeader(header: string, reqs: PaymentRequirementsV2): DecodedV2 {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(b64decode(header.trim()));
+  } catch {
+    return { ok: false, reason: "PAYMENT-SIGNATURE is not base64 JSON" };
+  }
+  const p = parsed as Partial<PaymentPayloadV2>;
+  if (p.x402Version !== 2) return { ok: false, reason: "unsupported x402Version" };
+  const acc = p.accepted;
+  if (!acc || acc.scheme !== reqs.scheme) return { ok: false, reason: `accepted.scheme must be ${reqs.scheme}` };
+  if (acc.network !== reqs.network) return { ok: false, reason: `accepted.network must be ${reqs.network}` };
+  if (typeof acc.payTo !== "string" || acc.payTo.toLowerCase() !== reqs.payTo.toLowerCase()) return { ok: false, reason: "accepted.payTo is not the gateway pay-to address" };
+  if (typeof acc.asset !== "string" || acc.asset.toLowerCase() !== reqs.asset.toLowerCase()) return { ok: false, reason: "accepted.asset is not the gateway asset" };
+  if (typeof acc.amount !== "string" || !/^\d+$/.test(acc.amount) || BigInt(acc.amount) < BigInt(reqs.amount)) return { ok: false, reason: "accepted.amount below required amount" };
+  const auth = p.payload?.authorization;
+  if (!p.payload || typeof p.payload.signature !== "string" || !auth) return { ok: false, reason: "payload missing signature or authorization" };
+  for (const k of ["from", "to", "value", "validAfter", "validBefore", "nonce"] as const) {
+    if (typeof auth[k] !== "string") return { ok: false, reason: `authorization.${k} missing` };
+  }
+  if (auth.to.toLowerCase() !== reqs.payTo.toLowerCase()) return { ok: false, reason: "authorization.to is not the gateway pay-to address" };
+  if (!/^\d+$/.test(auth.value) || BigInt(auth.value) < BigInt(reqs.amount)) return { ok: false, reason: "authorization.value below required amount" };
+  return { ok: true, payload: p as PaymentPayloadV2 };
 }
 
 export type Decoded = { ok: true; payload: PaymentPayload } | { ok: false; reason: string };
@@ -124,23 +209,23 @@ async function postJson<T>(fetchFn: typeof fetch, url: string, body: unknown, ex
 export async function facilitatorVerify(
   fetchFn: typeof fetch,
   facilitatorUrl: string,
-  paymentPayload: PaymentPayload,
-  paymentRequirements: PaymentRequirements,
+  paymentPayload: PaymentPayload | PaymentPayloadV2,
+  paymentRequirements: PaymentRequirements | PaymentRequirementsV2,
   headers?: FacilitatorHeaders,
 ): Promise<VerifyResponse> {
   const h = headers ? (await headers()).verify : {};
-  return postJson<VerifyResponse>(fetchFn, `${facilitatorUrl}/verify`, { x402Version: 1, paymentPayload, paymentRequirements }, h);
+  return postJson<VerifyResponse>(fetchFn, `${facilitatorUrl}/verify`, { x402Version: paymentPayload.x402Version, paymentPayload, paymentRequirements }, h);
 }
 
 export async function facilitatorSettle(
   fetchFn: typeof fetch,
   facilitatorUrl: string,
-  paymentPayload: PaymentPayload,
-  paymentRequirements: PaymentRequirements,
+  paymentPayload: PaymentPayload | PaymentPayloadV2,
+  paymentRequirements: PaymentRequirements | PaymentRequirementsV2,
   headers?: FacilitatorHeaders,
 ): Promise<SettleResponse> {
   const h = headers ? (await headers()).settle : {};
-  return postJson<SettleResponse>(fetchFn, `${facilitatorUrl}/settle`, { x402Version: 1, paymentPayload, paymentRequirements }, h);
+  return postJson<SettleResponse>(fetchFn, `${facilitatorUrl}/settle`, { x402Version: paymentPayload.x402Version, paymentPayload, paymentRequirements }, h);
 }
 
 export function encodePaymentResponse(settle: SettleResponse): string {

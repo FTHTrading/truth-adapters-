@@ -16,6 +16,8 @@
     { "pattern": "genesis402.com/*", "zone_name": "genesis402.com" },
     { "pattern": "www.genesis402.com/*", "zone_name": "genesis402.com" }
   ],
+  // Free reads: 120 requests per 60 s per client IP. Paid routes are not limited here (payment is the limit).
+  "ratelimits": [{ "name": "FREE_READS", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
   "d1_databases": [
     {
       "binding": "LEDGER",

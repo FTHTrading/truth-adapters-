@@ -38,14 +38,21 @@ import { llmsTxt, openapiJson, pricingJson, securityTxt, statusJson, wellKnownX4
 import { agentCard, landingHtml } from "./landing.ts";
 import {
   apostleVerify,
+  buildPaymentRequiredV2,
   buildRequirements,
+  buildRequirementsV2,
   decodePaymentHeader,
+  decodePaymentSignatureHeader,
+  encodeHeader,
   encodePaymentResponse,
   facilitatorSettle,
   facilitatorVerify,
   settlementReference,
   type FacilitatorHeaders,
+  type PaymentPayload,
+  type PaymentPayloadV2,
   type PaymentRequirements,
+  type PaymentRequirementsV2,
 } from "./x402.ts";
 
 export interface Deps {
@@ -60,6 +67,8 @@ export interface Deps {
   schemas?: Readonly<Record<string, unknown>>;
   /** Auth headers for an authenticated facilitator (CDP). Absent for the public testnet facilitator. */
   facilitatorHeaders?: FacilitatorHeaders;
+  /** Free-route rate limiter: returns false when the key has exceeded its budget. Absent = unlimited. */
+  rateLimit?: (key: string) => Promise<boolean>;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -68,8 +77,8 @@ const MAX_PAGE = 500;
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-allow-headers": "content-type, x-payment, x-payment-receipt, x-agent-id",
-  "access-control-expose-headers": "x-payment-response",
+  "access-control-allow-headers": "content-type, x-payment, payment-signature, x-payment-receipt, x-agent-id",
+  "access-control-expose-headers": "x-payment-response, payment-response, payment-required",
 };
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -179,9 +188,15 @@ function costWitness(deps: Deps, rail: string) {
   return createWitness(`COST:${rail}`, deps.keys, (i) => i, { clock: deps.clock });
 }
 
-function paymentRequired(reqs: PaymentRequirements | null, deps: Deps, error?: string): Response {
+function paymentRequired(reqs: PaymentRequirements | null, deps: Deps, error?: string, v2?: { resource: string; amount: string; description: string }): Response {
+  // v1 clients read the body; v2 clients read the PAYMENT-REQUIRED header. Both are served on every 402.
   const body: Record<string, unknown> = { x402Version: 1, accepts: reqs ? [reqs] : [] };
   if (error) body.error = error;
+  const headers: Record<string, string> = {};
+  if (deps.cfg.x402 && v2) {
+    headers["payment-required"] = encodeHeader(buildPaymentRequiredV2(deps.cfg.x402, v2.resource, v2.amount, v2.description, error));
+    body.x402v2 = "PAYMENT-REQUIRED header carries the x402 v2 document; pay with PAYMENT-SIGNATURE";
+  }
   if (deps.cfg.apostle) {
     body.alt_rails = [
       {
@@ -193,7 +208,7 @@ function paymentRequired(reqs: PaymentRequirements | null, deps: Deps, error?: s
       },
     ];
   }
-  return json(402, body);
+  return json(402, body, headers);
 }
 
 async function readJsonBody(req: Request): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; reason: string }> {
@@ -220,37 +235,59 @@ async function witnessRoute(req: Request, deps: Deps, url: URL, adapterName: str
 
   const resource = `${url.origin}${url.pathname}`;
   const reqs = deps.cfg.x402 ? buildRequirements(deps.cfg.x402, resource, spec.price.atomic, spec.description) : null;
+  const v2 = { resource, amount: spec.price.atomic, description: spec.description };
   const xPayment = req.headers.get("x-payment");
+  const paymentSignature = req.headers.get("payment-signature");
   const apostleReceipt = req.headers.get("x-payment-receipt");
 
   let cost: CostProof;
   const extraHeaders: Record<string, string> = {};
 
-  if (xPayment && reqs && deps.cfg.x402) {
-    const decoded = decodePaymentHeader(xPayment, reqs);
-    if (!decoded.ok) return paymentRequired(reqs, deps, decoded.reason);
+  if ((xPayment || paymentSignature) && reqs && deps.cfg.x402) {
+    // One settlement path for both wire generations; only decoding and the response header differ.
+    let wire: 1 | 2;
+    let payload: PaymentPayload | PaymentPayloadV2;
+    let requirements: PaymentRequirements | PaymentRequirementsV2;
+    let payerFrom: string;
+    if (paymentSignature) {
+      const reqsV2 = buildRequirementsV2(deps.cfg.x402, spec.price.atomic);
+      const decoded = decodePaymentSignatureHeader(paymentSignature, reqsV2);
+      if (!decoded.ok) return paymentRequired(reqs, deps, decoded.reason, v2);
+      wire = 2;
+      payload = decoded.payload;
+      requirements = reqsV2;
+      payerFrom = decoded.payload.payload.authorization.from;
+    } else {
+      const decoded = decodePaymentHeader(xPayment!, reqs);
+      if (!decoded.ok) return paymentRequired(reqs, deps, decoded.reason, v2);
+      wire = 1;
+      payload = decoded.payload;
+      requirements = reqs;
+      payerFrom = decoded.payload.payload.authorization.from;
+    }
     let verify;
     try {
-      verify = await facilitatorVerify(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs, deps.facilitatorHeaders);
+      verify = await facilitatorVerify(deps.fetch, deps.cfg.x402.facilitatorUrl, payload, requirements, deps.facilitatorHeaders);
     } catch (err) {
       return json(502, { refused: `facilitator unreachable: ${err instanceof Error ? err.message : String(err)}` });
     }
-    if (!verify.isValid) return paymentRequired(reqs, deps, verify.invalidReason ?? "payment invalid");
+    if (!verify.isValid) return paymentRequired(reqs, deps, verify.invalidReason ?? "payment invalid", v2);
     let settle;
     try {
-      settle = await facilitatorSettle(deps.fetch, deps.cfg.x402.facilitatorUrl, decoded.payload, reqs, deps.facilitatorHeaders);
+      settle = await facilitatorSettle(deps.fetch, deps.cfg.x402.facilitatorUrl, payload, requirements, deps.facilitatorHeaders);
     } catch (err) {
       return json(502, { refused: `facilitator unreachable: ${err instanceof Error ? err.message : String(err)}` });
     }
     const reference = settlementReference(settle);
-    if (!settle.success || !reference) return paymentRequired(reqs, deps, settle.errorReason ?? "settlement failed");
+    if (!settle.success || !reference) return paymentRequired(reqs, deps, settle.errorReason ?? "settlement failed", v2);
     const rail = `x402:exact:${reqs.network}`;
-    const payer = settle.payer ?? decoded.payload.payload.authorization.from;
+    const payer = settle.payer ?? payerFrom;
     const settlement = {
       rail,
+      wire_version: wire,
       network: reqs.network,
       asset: reqs.asset,
-      amount: reqs.maxAmountRequired,
+      amount: spec.price.atomic,
       payer,
       reference,
       facilitator: new URL(deps.cfg.x402.facilitatorUrl).host,
@@ -258,8 +295,8 @@ async function witnessRoute(req: Request, deps: Deps, url: URL, adapterName: str
     };
     const costAtt = await submit(deps.ledger, costWitness(deps, rail), settlement, undefined, { clock: deps.clock });
     if (costAtt.outcome !== "OBSERVED" || !costAtt.event) return json(500, { refused: "cost witness did not observe settlement" });
-    cost = { rail, asset: reqs.asset, amount: reqs.maxAmountRequired, payer, reference, witnessed_event_id: costAtt.event.id };
-    extraHeaders["x-payment-response"] = encodePaymentResponse(settle);
+    cost = { rail, asset: reqs.asset, amount: spec.price.atomic, payer, reference, witnessed_event_id: costAtt.event.id };
+    extraHeaders[wire === 2 ? "payment-response" : "x-payment-response"] = encodePaymentResponse(settle);
   } else if (apostleReceipt && deps.cfg.apostle) {
     const txHash = apostleReceipt.trim();
     if (!/^(0x)?[0-9a-fA-F]{64}$/.test(txHash)) return paymentRequired(reqs, deps, "X-Payment-Receipt is not a tx hash");
@@ -276,7 +313,7 @@ async function witnessRoute(req: Request, deps: Deps, url: URL, adapterName: str
     if (costAtt.outcome !== "OBSERVED" || !costAtt.event) return json(500, { refused: "cost witness did not observe settlement" });
     cost = { rail: "apostle:atp", asset: "ATP", amount: deps.cfg.apostle.priceAtpRaw, payer, reference: txHash, witnessed_event_id: costAtt.event.id };
   } else {
-    return paymentRequired(reqs, deps);
+    return paymentRequired(reqs, deps, undefined, v2);
   }
 
   const att = await submit(deps.ledger, adapterWitness(deps, spec), parsed.body, cost, { clock: deps.clock });
@@ -352,6 +389,11 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
   if (req.method === "GET" || req.method === "HEAD") {
+    // Free reads are the only unpaid surface; they carry a per-client budget so the ledger cannot be scraped for nothing.
+    if (deps.rateLimit) {
+      const key = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? "anonymous";
+      if (!(await deps.rateLimit(key))) return json(429, { refused: "rate limited: free reads are budgeted per client; paid routes are not" }, { "retry-after": "60" });
+    }
     if (path === "/") {
       const accept = req.headers.get("accept") ?? "";
       const wantsJson = accept.includes("application/json") && !accept.includes("text/html");
