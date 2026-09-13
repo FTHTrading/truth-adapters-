@@ -52,12 +52,18 @@ table{border-collapse:collapse;width:100%;font-size:.95rem;line-height:1.45}th,t
 <body>
 <main>
 <p class="mut">Genesis402 · operated by UnyKorn LLC (Wyoming)</p>
-<h1>A ledger that records what happened, who paid, and when.</h1>
-<p>Cryptographically witnessed. Signed and hash-chained. Append-only and tamper-evident. Independently verifiable by anyone, without trusting the operator. No account, no API key: pay per observation over x402.</p>
+<h1>Give your agent a receipt it can verify.</h1>
+<p>Genesis402 is an append-only ledger that records what happened, who paid, and when. Cryptographically witnessed. Signed and hash-chained. Append-only and tamper-evident. Independently verifiable by anyone, without trusting the operator. No account, no API key: pay per observation over x402.</p>
 <div class="labels">
 <span>mode: ${esc(labels.mode)}</span><span>status: ${esc(labels.status)}</span><span>anchoring: ${esc(labels.anchoring)}</span><span>review: ${esc(labels.review)}</span>
 </div>
 <p class="mut">${esc(modeLine)}</p>
+
+<div style="display:flex;gap:.8rem;margin:1.2rem 0;flex-wrap:wrap">
+<a href="#how-it-works" style="display:inline-block;background:var(--acc);color:#fff;padding:.5rem 1rem;border-radius:4px;text-decoration:none;font-weight:600">Run a test verification</a>
+<a href="https://buy.stripe.com/7sY14p2zH1Tk28ResR9EI1a" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:var(--code);border:1px solid var(--line);color:var(--fg);padding:.5rem 1rem;border-radius:4px;text-decoration:none;font-weight:600">48-Hour Evidence Pack ($49)</a>
+<a href="mailto:kevan@unykorn.org?subject=Concierge%20Evidence%20Pack%20Fit%20Check" style="display:inline-block;border:1px solid var(--line);color:var(--mut);padding:.5rem 1rem;border-radius:4px;text-decoration:none;font-size:.9rem">Fit check inquiry</a>
+</div>
 
 <h2>What it does not do</h2>
 <p>It does not judge intent, interpret meaning, decide fairness, resolve disputes, explain outcomes, grant exceptions, edit or delete history, or hold or move client funds. Every adapter is translation-only: it maps a domain to an observation and adds no rules. A payload containing an opinion is refused, even when paid for.</p>
@@ -70,7 +76,7 @@ ${rows}
 </tbody></table></div>
 <p class="mut"><em>direct</em> means the gateway fetched or read the thing itself. <em>submitted</em> means the submission is the fact and its content is the submitter's claim.</p>
 
-<h2>How an agent uses it</h2>
+<h2 id="how-it-works">How an agent uses it</h2>
 <pre>GET  ${esc(origin)}/.well-known/truth.json        # adapters, prices, rail, witness public key
 POST ${esc(origin)}/witness/document                # → 402 with x402 requirements
 POST ${esc(origin)}/witness/document  X-PAYMENT: …  # → signed attestation + entry hash

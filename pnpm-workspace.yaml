@@ -1,2 +1,4 @@
 packages:
   - "packages/*"
+allowBuilds:
+  '@coinbase/x402': true
