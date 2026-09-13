@@ -12,6 +12,8 @@ file. A label changes only when the evidence in the right-hand column changes.
 | x402 settlement (USDC) | `DRY_RUN` | Base Sepolia via x402.org facilitator; pay-to = UnyKorn treasury; no paid round-trip exercised yet (needs a funded Sepolia payer key) |
 | Mainnet settlement via Coinbase (CDP) facilitator | `IMPLEMENTED_NOT_CONFIGURED` | per-request JWT auth wired and tested with a mock; needs `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` secrets and `X402_NETWORK=base` (founder flag F-3); fail-safe keeps paid routes at 503 without them |
 | genesis402.com cut-over | `BLOCKED_ON_FOUNDER` | config ready on path 2; deploy blocked by the auto-mode classifier twice; three commands in the ship receipt |
+| x402 wire versions | `LOCAL_VERIFIED` | v1 (`X-PAYMENT`) and v2 (`PAYMENT-SIGNATURE` / `PAYMENT-REQUIRED` / `PAYMENT-RESPONSE`, eip155 ids) both accepted; facilitator receives the payer's version; live-untested |
+| Rate limit on free reads | `IMPLEMENTED_NOT_DEPLOYED` | Workers Rate Limiting binding, 120 req / 60 s per client IP on GET; 429 with Retry-After; paid routes exempt |
 | Apostle ATP rail | `PENDING_CONFIGURATION` | verify call shape reused from UnyKorn-X402-aws; not called live |
 | Mode | `test` when `X402_NETWORK=base-sepolia`, `live` only on `base`, `local` for file ledgers | `packages/gateway/src/config.ts` |
 | Anchoring | `UNANCHORED` externally | merkle anchors are internal ledger records signed by the same key; no OTS/TSA/chain anchor |

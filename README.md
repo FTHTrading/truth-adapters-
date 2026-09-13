@@ -20,8 +20,9 @@ truth (frozen)  ──spec──▶  packages/kernel      the invariants as a ru
 ## What an observation costs and what it buys
 
 An agent POSTs input to `/witness/{adapter}`, receives HTTP 402 with x402
-payment requirements, pays a fraction of a cent in USDC through a facilitator,
-and retries. The settlement itself is witnessed first (a `COST:` event), then
+payment requirements (both wire generations: the v1 body with `X-PAYMENT`,
+and the v2 `PAYMENT-REQUIRED` header with `PAYMENT-SIGNATURE`), pays a
+fraction of a cent in USDC through a facilitator, and retries. The settlement itself is witnessed first (a `COST:` event), then
 the adapter observes the input, then the finalization records payer, amount
 and the reference of the settlement. All three are signed with the gateway's
 Ed25519 witness key and chained. Anyone can verify any entry at
