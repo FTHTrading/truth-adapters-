@@ -23,6 +23,18 @@ const validInputs: Record<string, unknown> = {
   "evm-tx": { chain_id: 8453, tx_hash: "0x" + "ab".repeat(32) },
   "xrpl-tx": { tx_hash: "AB".repeat(32), network: "mainnet" },
   correction: { references: HELLO_SHA, replacement_sha256: "0x" + "AB".repeat(32) },
+  "g402-receipt": {
+    receiptVersion: "genesis402-receipt-v1",
+    receiptId: "g402_rcpt_46e945cf29cd",
+    kind: "payment.dry_run",
+    mode: "DRY_RUN",
+    truthLabels: ["VERIFIED", "PROJECTION"],
+    decision: { outcome: "AUTHORIZED_NOT_SUBMITTED", reasonCodes: ["POLICY.OK"] },
+    claim: { statement: "Policy evaluation returned OK", limitations: ["…"] },
+    issuer: { id: "unykorn-control", keyId: "g402-key-25a7b4924d932aa9", alg: "ed25519", signature: "ab".repeat(64) },
+    lifecycle: { issuedAt: "2026-09-13T11:59:13.828Z", statusAtIssuance: "ACTIVE" },
+    integrity: { canonicalBodyHash: "sha256:" + "13".repeat(32), leafHash: "50".repeat(32), segmentRoot: "6c".repeat(32) },
+  },
 };
 
 const ctx: AdapterContext = {
@@ -136,6 +148,17 @@ test("correction: records the reference, normalises digests, refuses without a r
   assert.equal(p.replacement_sha256, "ab".repeat(32));
   assert.equal(p.note_sha256, null);
   assert.equal(await WORKER_ADAPTERS.correction!.translate({ replacement_sha256: HELLO_SHA }, ctx), null);
+});
+
+test("g402-receipt: records identity and integrity commitments only; never the decision, labels or claim", async () => {
+  const p = (await WORKER_ADAPTERS["g402-receipt"]!.translate(validInputs["g402-receipt"], ctx)) as Record<string, unknown>;
+  assert.equal(p.receipt_id, "g402_rcpt_46e945cf29cd");
+  assert.equal(p.receipt_kind, "payment.dry_run");
+  assert.equal(p.canonical_body_hash, "13".repeat(32));
+  assert.equal(p.segment_root, "6c".repeat(32));
+  for (const k of ["decision", "truthLabels", "truth_labels", "claim", "policy", "body", "signature", "outcome"]) assert.equal(k in p, false, k);
+  assert.equal(await WORKER_ADAPTERS["g402-receipt"]!.translate({ ...validInputs["g402-receipt"] as object, receiptVersion: "genesis402-receipt-v2" }, ctx), null, "unknown version is not observable");
+  assert.equal(await WORKER_ADAPTERS["g402-receipt"]!.translate({ ...validInputs["g402-receipt"] as object, integrity: { leafHash: "zz" } }, ctx), null, "missing commitments are not observable");
 });
 
 test("forbidden-key scanner catches nested and disguised keys", () => {

@@ -6,4 +6,5 @@ export { httpServed, isObservableUrl, MAX_BODY_BYTES } from "./http-served.ts";
 export { evmTx, DEFAULT_RPC } from "./evm-tx.ts";
 export { xrplTx, XRPL_RPC } from "./xrpl-tx.ts";
 export { correction } from "./correction.ts";
+export { g402Receipt } from "./g402-receipt.ts";
 export { WORKER_ADAPTERS } from "./registry.ts";
