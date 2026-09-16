@@ -22,8 +22,8 @@ jobs:
       run:
         working-directory: packages/gateway
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
       - name: Install
@@ -40,15 +40,15 @@ jobs:
           FACILITATOR_PROXY_KEY: ${{ secrets.FACILITATOR_PROXY_KEY }}
         run: |
           set -e
-          if [ -n "$X402_FACILITATOR_BEARER" ]; then printf '%s' "$X402_FACILITATOR_BEARER" | npx --yes wrangler@4 secret put X402_FACILITATOR_BEARER --name genesis402-apex; fi
-          if [ -n "$FACILITATOR_PROXY_KEY" ]; then printf '%s' "$FACILITATOR_PROXY_KEY" | npx --yes wrangler@4 secret put FACILITATOR_PROXY_KEY --name genesis402-apex; fi
+          if [ -n "$X402_FACILITATOR_BEARER" ]; then printf '%s' "$X402_FACILITATOR_BEARER" | npx --yes wrangler@4.132.0 secret put X402_FACILITATOR_BEARER --name genesis402-apex; fi
+          if [ -n "$FACILITATOR_PROXY_KEY" ]; then printf '%s' "$FACILITATOR_PROXY_KEY" | npx --yes wrangler@4.132.0 secret put FACILITATOR_PROXY_KEY --name genesis402-apex; fi
       - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -e
-          if [ "${{ inputs.mode }}" = "live" ]; then npx --yes wrangler@4 deploy -c wrangler.live.jsonc; else npx --yes wrangler@4 deploy; fi
+          if [ "${{ inputs.mode }}" = "live" ]; then npx --yes wrangler@4.132.0 deploy -c wrangler.live.jsonc; else npx --yes wrangler@4.132.0 deploy; fi
       - name: Verify served
         run: |
           set -e

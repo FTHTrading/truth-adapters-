@@ -182,6 +182,7 @@ th{color:var(--mut);text-transform:uppercase}
   <div class="hud-sub">this gateway · ${adapterNames.length} adapter(s): ${esc(adapterNames.join(", ") || "none")}</div>
   <div class="hud-sub" id="agRail">task rail · reading ${esc(RAIL_ORIGIN.replace(/^https?:\/\//, ""))}/health …</div>
   <div class="hud-sub" id="agProve">proof receipts · reading …</div>
+  <div class="hud-sub" id="agSku">launch sku · reading …</div>
   <div class="hud-sub" id="agSelf">this gateway · mode ${esc(labels.mode)} · status ${esc(labels.status)} · anchoring ${esc(labels.anchoring)}</div>
 </div>
 
@@ -378,8 +379,15 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
       const lanes = (h.payable_lanes || []).join(', ') || 'none';
       const led = (h.replay_protection && h.replay_protection.ledger) || {};
       const st = h.settlement || {};
-      txt(elRail, 'task rail ' + host + ' · ' + (h.tasks || []).join(', ') + ' · payable: ' + lanes + ' · paid calls: ' + (led.receipts != null ? led.receipts : '?') + ' · settlement: cdp ' + (st.cdp || '?') + ', self ' + (st.self_settle || '?'));
+      const split = led.external_receipts != null ? ' (' + led.external_receipts + ' external, ' + (led.internal_receipts || 0) + ' internal tests)' : '';
+      txt(elRail, 'task rail ' + host + ' · ' + (h.tasks || []).join(', ') + ' · payable: ' + lanes + ' · paid calls: ' + (led.receipts != null ? led.receipts : '?') + split + ' · settlement: cdp ' + (st.cdp || '?') + ', self ' + (st.self_settle || '?'));
     }).catch(function(){ txt(elRail, 'task rail ' + host + ' · unreachable'); });
+    const elSku = document.getElementById('agSku');
+    fetch(rail + '/.well-known/x402', { headers: { accept: 'application/json' } }).then(function(r){ return r.json(); }).then(function(d){
+      const k = d && d.launch_sku;
+      if (!k) { txt(elSku, 'launch sku · none advertised'); return; }
+      txt(elSku, 'launch sku · ' + k.name + ' · ' + String(k.endpoint || '').replace(/^https?:\/\//, '') + ' · $' + k.price_usd + ' per call · receipts: ' + host + '/receipts');
+    }).catch(function(){ txt(elSku, 'launch sku · unreachable'); });
     fetch(rail + '/prove/stats', { headers: { accept: 'application/json' } }).then(function(r){ return r.json(); }).then(function(p){
       txt(elProve, 'proof receipts (' + host + '/prove) · sold: ' + (p.receipts != null ? p.receipts : '?') + ' · anchor: ' + (p.anchor || '?') + ' · key ' + String(p.keyId || '').slice(0, 24));
     }).catch(function(){ txt(elProve, 'proof receipts · unreachable'); });
