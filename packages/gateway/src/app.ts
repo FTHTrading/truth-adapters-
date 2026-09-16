@@ -69,6 +69,8 @@ export interface Deps {
   facilitatorHeaders?: FacilitatorHeaders;
   /** Free-route rate limiter: returns false when the key has exceeded its budget. Absent = unlimited. */
   rateLimit?: (key: string) => Promise<boolean>;
+  /** Bearer that other UnyKorn Workers present to use this gateway as their facilitator (CDP fronting). Absent = proxy off. */
+  facilitatorProxyKey?: string;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -387,6 +389,31 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+  // ---- facilitator proxy: bearer-keyed, CDP only, no free path ------------------------------------------
+  if (path === "/facilitator/supported" || path === "/facilitator/verify" || path === "/facilitator/settle") {
+    if (!deps.facilitatorProxyKey) return json(503, { refused: "facilitator proxy not configured (FACILITATOR_PROXY_KEY)" });
+    const auth = req.headers.get("authorization") ?? "";
+    if (auth !== `Bearer ${deps.facilitatorProxyKey}`) return json(401, { refused: "bearer required" });
+    if (!deps.cfg.x402 || deps.cfg.x402.facilitatorKind !== "cdp" || !deps.facilitatorHeaders) return json(503, { refused: "proxy fronts the CDP facilitator only; this gateway is not configured for it" });
+    const base = deps.cfg.x402.facilitatorUrl;
+    const hdrs = await deps.facilitatorHeaders();
+    if (path === "/facilitator/supported") {
+      if (req.method !== "GET") return json(405, { refused: "GET" });
+      const up = await deps.fetch(`${base}/supported`, { headers: { accept: "application/json", ...hdrs.verify } });
+      return new Response(await up.text(), { status: up.status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
+    }
+    if (req.method !== "POST") return json(405, { refused: "POST" });
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_BYTES) return json(413, { refused: "body too large" });
+    let body: unknown;
+    try { body = JSON.parse(raw); } catch { return json(400, { refused: "invalid JSON" }); }
+    const b = body as { paymentPayload?: unknown; paymentRequirements?: unknown };
+    if (!b || typeof b !== "object" || !b.paymentPayload || !b.paymentRequirements) return json(400, { refused: "paymentPayload and paymentRequirements required" });
+    const which = path.endsWith("/verify") ? "verify" : "settle";
+    const up = await deps.fetch(`${base}/${which}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json", ...hdrs[which] }, body: raw });
+    return new Response(await up.text(), { status: up.status, headers: { "content-type": "application/json; charset=utf-8", ...CORS } });
+  }
 
   if (req.method === "GET" || req.method === "HEAD") {
     // Free reads are the only unpaid surface; they carry a per-client budget so the ledger cannot be scraped for nothing.
