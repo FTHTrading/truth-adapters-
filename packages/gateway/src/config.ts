@@ -41,7 +41,7 @@ export interface X402Config {
   payTo: string;
   maxTimeoutSeconds: number;
   /** "cdp" when the Coinbase facilitator is used with per-request JWT auth; "public" otherwise. */
-  facilitatorKind: "cdp" | "public";
+  facilitatorKind: "cdp" | "public" | "trusted";
 }
 
 /** Coinbase Developer Platform x402 facilitator (mainnet). Per-request bearer JWT from a CDP key. */
@@ -67,6 +67,8 @@ export interface EnvLike {
   SERVICE_NAME?: string;
   X402_NETWORK?: string;
   X402_FACILITATOR_URL?: string;
+  /** Secret. Bearer for a facilitator we operate (the task rail's /facilitator/*). Makes it kind "trusted". */
+  X402_FACILITATOR_BEARER?: string;
   X402_PAY_TO?: string;
   X402_MAX_TIMEOUT_SECONDS?: string;
   APOSTLE_FACILITATOR_URL?: string;
@@ -91,10 +93,12 @@ export function configFromEnv(env: EnvLike): GatewayConfig {
   let facilitatorUrl = (env.X402_FACILITATOR_URL ?? "").replace(/\/$/, "");
   if (!facilitatorUrl) facilitatorUrl = hasCdp ? CDP_FACILITATOR_URL : PUBLIC_TESTNET_FACILITATOR_URL;
   if (!/^https:\/\//.test(facilitatorUrl)) problems.push("X402_FACILITATOR_URL must be https");
-  const facilitatorKind: X402Config["facilitatorKind"] = facilitatorUrl.startsWith("https://api.cdp.coinbase.com") ? "cdp" : "public";
+  const hasBearer = !!(env.X402_FACILITATOR_BEARER && env.X402_FACILITATOR_BEARER.length >= 16);
+  const facilitatorKind: X402Config["facilitatorKind"] = facilitatorUrl.startsWith("https://api.cdp.coinbase.com") ? "cdp" : (hasBearer && !facilitatorUrl.startsWith("https://x402.org") ? "trusted" : "public");
   if (facilitatorKind === "cdp" && !hasCdp) problems.push("CDP facilitator requires CDP_API_KEY_ID and CDP_API_KEY_SECRET secrets");
-  // Fail-safe: mainnet settles only through an authenticated facilitator. The public testnet facilitator never settles mainnet.
-  if (net?.network === "base" && facilitatorKind !== "cdp") problems.push("X402_NETWORK=base requires the CDP facilitator (set CDP_API_KEY_ID / CDP_API_KEY_SECRET)");
+  // Fail-safe: mainnet settles only through an authenticated facilitator (CDP directly, or a facilitator we operate
+  // behind a bearer). The public testnet facilitator never settles mainnet.
+  if (net?.network === "base" && facilitatorKind === "public") problems.push("X402_NETWORK=base requires an authenticated facilitator (CDP secrets, or X402_FACILITATOR_URL + X402_FACILITATOR_BEARER)");
   if (net && problems.length === 0) {
     x402 = { network: net, facilitatorUrl, payTo, maxTimeoutSeconds: Number(env.X402_MAX_TIMEOUT_SECONDS ?? "60") || 60, facilitatorKind };
   }

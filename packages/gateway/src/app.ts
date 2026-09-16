@@ -395,7 +395,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     if (!deps.facilitatorProxyKey) return json(503, { refused: "facilitator proxy not configured (FACILITATOR_PROXY_KEY)" });
     const auth = req.headers.get("authorization") ?? "";
     if (auth !== `Bearer ${deps.facilitatorProxyKey}`) return json(401, { refused: "bearer required" });
-    if (!deps.cfg.x402 || deps.cfg.x402.facilitatorKind !== "cdp" || !deps.facilitatorHeaders) return json(503, { refused: "proxy fronts the CDP facilitator only; this gateway is not configured for it" });
+    if (!deps.cfg.x402 || deps.cfg.x402.facilitatorKind === "public" || !deps.facilitatorHeaders) return json(503, { refused: "proxy fronts an authenticated facilitator only; this gateway is not configured for it" });
     const base = deps.cfg.x402.facilitatorUrl;
     const hdrs = await deps.facilitatorHeaders();
     if (path === "/facilitator/supported") {

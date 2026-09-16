@@ -1,0 +1,66 @@
+name: deploy-gateway
+
+# The sanctioned deploy path for the truth gateway (Worker `genesis402-apex`, routes genesis402.com + troptionsmint.com).
+# Every run is a deploy receipt: mode, commit, verify-served results in the job log.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "test = Base Sepolia via x402.org (wrangler.jsonc); live = Base mainnet via the rail facilitator (wrangler.live.jsonc)"
+        required: true
+        default: "test"
+        type: choice
+        options: [test, live]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install
+        run: npm ci --ignore-scripts
+        working-directory: .
+      - name: Test (119+ checks incl. claims gate)
+        run: npm test
+        working-directory: .
+      - name: Secrets onto the Worker (values come from repository secrets; never echoed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          X402_FACILITATOR_BEARER: ${{ secrets.X402_FACILITATOR_BEARER }}
+          FACILITATOR_PROXY_KEY: ${{ secrets.FACILITATOR_PROXY_KEY }}
+        run: |
+          set -e
+          if [ -n "$X402_FACILITATOR_BEARER" ]; then printf '%s' "$X402_FACILITATOR_BEARER" | npx --yes wrangler@4 secret put X402_FACILITATOR_BEARER --name genesis402-apex; fi
+          if [ -n "$FACILITATOR_PROXY_KEY" ]; then printf '%s' "$FACILITATOR_PROXY_KEY" | npx --yes wrangler@4 secret put FACILITATOR_PROXY_KEY --name genesis402-apex; fi
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -e
+          if [ "${{ inputs.mode }}" = "live" ]; then npx --yes wrangler@4 deploy -c wrangler.live.jsonc; else npx --yes wrangler@4 deploy; fi
+      - name: Verify served
+        run: |
+          set -e
+          sleep 8
+          for h in genesis402.com www.genesis402.com; do
+            code=$(curl -s -o /tmp/b -w '%{http_code}' "https://$h/?v=$GITHUB_RUN_ID")
+            title=$(grep -o '<title>[^<]*' /tmp/b | head -1)
+            echo "$h -> $code $title"
+            test "$code" = "200"
+            ! grep -q 'TROPTIONS' /tmp/b
+            grep -q 'TRACK WITH CAMERA' /tmp/b
+          done
+          curl -s "https://genesis402.com/.well-known/x402?v=$GITHUB_RUN_ID" | tee /tmp/x | head -c 400; echo
+          if [ "${{ inputs.mode }}" = "live" ]; then grep -q '"mode": *"LIVE"' /tmp/x; fi
+          curl -s -o /dev/null -w 'facilitator/supported without bearer -> %{http_code}\n' https://genesis402.com/facilitator/supported

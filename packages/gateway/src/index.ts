@@ -33,6 +33,10 @@ export interface Env extends EnvLike {
  * Only constructed when both secrets exist; the secrets are read here and nowhere else.
  */
 function facilitatorHeadersFrom(env: Env) {
+  if (env.X402_FACILITATOR_BEARER && !(env.X402_FACILITATOR_URL ?? "").startsWith("https://api.cdp.coinbase.com")) {
+    const h = { Authorization: `Bearer ${env.X402_FACILITATOR_BEARER}` };
+    return async () => ({ verify: { ...h }, settle: { ...h } });
+  }
   if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) return undefined;
   const make = createCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
   if (!make) return undefined;

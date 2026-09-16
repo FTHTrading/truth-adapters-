@@ -511,3 +511,14 @@ test("facilitator proxy: off without key, 401 without bearer, 503 unless CDP, fo
   pub.facilitatorProxyKey = "proxy-key";
   r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body, headers: H }), pub); assert.equal(r.status, 503);
 });
+
+test("trusted facilitator: bearer + non-CDP URL is allowed on base mainnet; public testnet facilitator is not", async () => {
+  const { configFromEnv } = await import("../src/config.ts");
+  const ok = configFromEnv({ SERVICE_NAME: "t", X402_NETWORK: "base", X402_FACILITATOR_URL: "https://twin.unykorn.org/facilitator", X402_FACILITATOR_BEARER: "fpk_0123456789abcdef", X402_PAY_TO: PAY_TO });
+  assert.ok(ok.x402, "trusted facilitator config must load: " + JSON.stringify(ok.disabledReason ?? null));
+  assert.equal(ok.x402!.facilitatorKind, "trusted");
+  const bad = configFromEnv({ SERVICE_NAME: "t", X402_NETWORK: "base", X402_FACILITATOR_URL: "https://x402.org/facilitator", X402_FACILITATOR_BEARER: "fpk_0123456789abcdef", X402_PAY_TO: PAY_TO });
+  assert.equal(bad.x402, null);
+  const short = configFromEnv({ SERVICE_NAME: "t", X402_NETWORK: "base", X402_FACILITATOR_URL: "https://twin.unykorn.org/facilitator", X402_FACILITATOR_BEARER: "short", X402_PAY_TO: PAY_TO });
+  assert.equal(short.x402, null, "a bearer under 16 chars does not make a facilitator trusted");
+});

@@ -2,8 +2,8 @@
 //   go live:      npx wrangler deploy -c wrangler.live.jsonc
 //   back to test: npx wrangler deploy                      (wrangler.jsonc)
 // Requires two Worker secrets first (config.ts refuses paid routes without them):
-//   npx wrangler secret put CDP_API_KEY_ID     --name genesis402-apex
-//   npx wrangler secret put CDP_API_KEY_SECRET --name genesis402-apex
+//   npx wrangler secret put X402_FACILITATOR_BEARER --name genesis402-apex   (the shared facilitator bearer)
+//   npx wrangler secret put FACILITATOR_PROXY_KEY   --name genesis402-apex   (bearer other Workers present to THIS gateway's /facilitator/*)
 {
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
   "name": "genesis402-apex",
@@ -29,8 +29,9 @@
   ],
   "vars": {
     "SERVICE_NAME": "genesis402-truth-gateway",
-    // Base mainnet. With no X402_FACILITATOR_URL the gateway selects the CDP facilitator when the two secrets exist.
+    // Base mainnet through the task rail's facilitator (bearer secret X402_FACILITATOR_BEARER). The CDP credential stays on the rail.
     "X402_NETWORK": "base",
+    "X402_FACILITATOR_URL": "https://twin.unykorn.org/facilitator",
     "X402_PAY_TO": "0x7d9a65d06dcc435a52D5880C6310Bd6E96c156DB",
     "X402_MAX_TIMEOUT_SECONDS": "60",
     "APOSTLE_FACILITATOR_URL": "https://x402.unykorn.org",
