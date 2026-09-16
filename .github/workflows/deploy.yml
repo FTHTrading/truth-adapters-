@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 24
       - name: Install
-        run: npm ci --ignore-scripts
+        run: npm install --no-audit --no-fund --ignore-scripts
         working-directory: .
       - name: Test (119+ checks incl. claims gate)
         run: npm test
