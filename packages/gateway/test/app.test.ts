@@ -456,3 +456,24 @@ test("unknown adapter, bad body, oversize body → refused without writing", asy
   assert.equal((await post(deps, "/witness/document", big, { "x-payment": paymentHeader() })).status, 400);
   assert.equal(await deps.ledger.length(), 0);
 });
+
+test("landing says nothing beyond host + labels: troptionsmint.com and genesis402.com both pass the claims gate, carry camera opt-in and the agents panel", async () => {
+  const deps = await makeDeps(goodFacilitator(), WORKER_ADAPTERS, { SECURITY_CONTACT: "mailto:security@example.invalid" });
+  for (const origin of ["https://troptionsmint.com", "https://genesis402.com", "https://www.troptionsmint.com"]) {
+    const res = await handle(new Request(origin + "/", { headers: { accept: "text/html" } }), deps);
+    const body = await res.text();
+    const verdict = scanClaims(body);
+    assert.deepEqual(verdict.hits, [], origin + " served bytes must be free of forbidden phrases");
+    const host = new URL(origin).hostname;
+    assert.match(body, new RegExp("<title>" + host + " — x402 truth gateway</title>"));
+    assert.ok(!/AUTONOMOUS ASSET ENGINE|ZERO INTERMEDIARIES|Autonomous Asset Mint|Autonomous Agent Runtime/.test(body), origin + " carries no slogan");
+    assert.match(body, /TRACK WITH CAMERA/);
+    assert.match(body, /Frames are never uploaded/);
+    assert.match(body, /getUserMedia/);
+    assert.match(body, /id="agents" data-rail="https:\/\/twin\.unykorn\.org"/);
+    assert.match(body, /mode: test/);
+    const card = (await (await handle(new Request(origin + "/.well-known/agent.json"), deps)).json()) as any;
+    assert.equal(card.name, host + " truth gateway");
+    assert.deepEqual(scanClaims(JSON.stringify(card)).hits, []);
+  }
+});

@@ -422,6 +422,14 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     if (path === "/.well-known/x402") return json(200, wellKnownX402(deps.cfg, url.origin, deps.adapters));
     if (path === "/openapi.json") return json(200, openapiJson(url.origin, deps.adapters, labelsOf(deps.cfg)));
     if (path === "/llms.txt") return new Response(llmsTxt(url.origin, deps.adapters, labelsOf(deps.cfg)), { headers: { "content-type": "text/plain; charset=utf-8", ...CORS } });
+    if (path === "/robots.txt") {
+      const robots = `User-agent: *\nAllow: /\n\nUser-agent: GPTBot\nAllow: /\n\nUser-agent: ClaudeBot\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /\n\nUser-agent: Google-Extended\nAllow: /\n\nSitemap: ${url.origin}/sitemap.xml\n`;
+      return new Response(robots, { headers: { "content-type": "text/plain; charset=utf-8", ...CORS } });
+    }
+    if (path === "/sitemap.xml") {
+      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${url.origin}/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>\n  <url><loc>${url.origin}/.well-known/x402</loc><changefreq>daily</changefreq><priority>0.9</priority></url>\n  <url><loc>${url.origin}/.well-known/agent.json</loc><changefreq>daily</changefreq><priority>0.9</priority></url>\n  <url><loc>${url.origin}/.well-known/truth.json</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n  <url><loc>${url.origin}/openapi.json</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n  <url><loc>${url.origin}/pricing.json</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n  <url><loc>${url.origin}/status.json</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>\n  <url><loc>${url.origin}/llms.txt</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n</urlset>\n`;
+      return new Response(sitemap, { headers: { "content-type": "application/xml; charset=utf-8", ...CORS } });
+    }
     if (path === "/.well-known/security.txt" || path === "/security.txt") {
       if (!deps.cfg.securityContact) return json(404, { refused: "SECURITY_CONTACT not configured" });
       return new Response(securityTxt(deps.cfg.securityContact, url.origin), { headers: { "content-type": "text/plain; charset=utf-8", ...CORS } });

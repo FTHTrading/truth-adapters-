@@ -1,16 +1,17 @@
+// LIVE config. Same Worker name, same routes, same D1 as wrangler.jsonc. Only the rail vars differ.
+//   go live:      npx wrangler deploy -c wrangler.live.jsonc
+//   back to test: npx wrangler deploy                      (wrangler.jsonc)
+// Requires two Worker secrets first (config.ts refuses paid routes without them):
+//   npx wrangler secret put CDP_API_KEY_ID     --name genesis402-apex
+//   npx wrangler secret put CDP_API_KEY_SECRET --name genesis402-apex
 {
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
-  // Script name inherited from the previous apex Worker: Cloudflare binds zone routes to the script name and
-  // wrangler cannot delete routes, so the truth gateway deploys under it (ADR-0006, ship receipt path 2).
-  // Rollback target: version 36d59739 via `wrangler rollback --name genesis402-apex`.
   "name": "genesis402-apex",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "triggers": { "crons": ["0 * * * *"] },
-  // Step A (preview): workers_dev true, no routes. Step B (cut-over): routes below enabled by the
-  // ship receipt in .forge/ship-receipt-genesis402-v1.md. Rollback = redeploy with routes removed.
   "workers_dev": false,
   "routes": [
     { "pattern": "genesis402.com/*", "zone_name": "genesis402.com" },
@@ -18,7 +19,6 @@
     { "pattern": "troptionsmint.com/*", "zone_name": "troptionsmint.com" },
     { "pattern": "www.troptionsmint.com/*", "zone_name": "troptionsmint.com" }
   ],
-  // Free reads: 120 requests per 60 s per client IP. Paid routes are not limited here (payment is the limit).
   "ratelimits": [{ "name": "FREE_READS", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }],
   "d1_databases": [
     {
@@ -29,15 +29,12 @@
   ],
   "vars": {
     "SERVICE_NAME": "genesis402-truth-gateway",
-    // test mode until the mainnet facilitator (CDP) credentials exist; see .forge/founder-flags.md F-3
-    "X402_NETWORK": "base-sepolia",
-    "X402_FACILITATOR_URL": "https://x402.org/facilitator",
-    // UnyKorn LLC treasury address already published as pay-to on the live rail (twin.unykorn.org/health)
+    // Base mainnet. With no X402_FACILITATOR_URL the gateway selects the CDP facilitator when the two secrets exist.
+    "X402_NETWORK": "base",
     "X402_PAY_TO": "0x7d9a65d06dcc435a52D5880C6310Bd6E96c156DB",
     "X402_MAX_TIMEOUT_SECONDS": "60",
     "APOSTLE_FACILITATOR_URL": "https://x402.unykorn.org",
     "APOSTLE_PRICE_ATP_RAW": "250000000000000000",
-    // already public on genesis402.com's served discovery documents
     "SECURITY_CONTACT": "mailto:kevan@unykorn.org"
   }
 }
