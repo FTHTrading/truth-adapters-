@@ -477,3 +477,37 @@ test("landing says nothing beyond host + labels: troptionsmint.com and genesis40
     assert.deepEqual(scanClaims(JSON.stringify(card)).hits, []);
   }
 });
+
+test("facilitator proxy: off without key, 401 without bearer, 503 unless CDP, forwards verify/settle with the gateway JWT", async () => {
+  const fac = goodFacilitator();
+  const deps = await makeDeps(fac, WORKER_ADAPTERS, { X402_FACILITATOR_URL: "https://api.cdp.coinbase.com/platform/v2/x402", CDP_API_KEY_ID: "id", CDP_API_KEY_SECRET: "sec" });
+  const seen: Array<{ url: string; auth: string | undefined }> = [];
+  deps.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input); seen.push({ url, auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
+    if (url.endsWith("/supported")) return Response.json({ kinds: [{ scheme: "exact", network: "eip155:8453" }] });
+    if (url.endsWith("/verify")) return Response.json(fac.verify(JSON.parse(String(init?.body))));
+    if (url.endsWith("/settle")) return Response.json(fac.settle(JSON.parse(String(init?.body))));
+    throw new Error("unexpected " + url);
+  }) as typeof fetch;
+  deps.facilitatorHeaders = async () => ({ verify: { Authorization: "Bearer v-jwt" }, settle: { Authorization: "Bearer s-jwt" } });
+  const body = JSON.stringify({ x402Version: 2, paymentPayload: { a: 1 }, paymentRequirements: { b: 2 } });
+  // off
+  let r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body }), deps);
+  assert.equal(r.status, 503);
+  deps.facilitatorProxyKey = "proxy-key";
+  // no bearer / wrong bearer
+  r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body }), deps); assert.equal(r.status, 401);
+  r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body, headers: { authorization: "Bearer nope" } }), deps); assert.equal(r.status, 401);
+  const H = { authorization: "Bearer proxy-key", "content-type": "application/json" };
+  // bad body
+  r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body: "{}", headers: H }), deps); assert.equal(r.status, 400);
+  // supported / verify / settle forward with the right JWT each
+  r = await handle(new Request("https://gw.test/facilitator/supported", { headers: H }), deps); assert.equal(r.status, 200);
+  r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body, headers: H }), deps); assert.equal(r.status, 200);
+  r = await handle(new Request("https://gw.test/facilitator/settle", { method: "POST", body, headers: H }), deps); assert.equal(r.status, 200);
+  assert.deepEqual(seen.map((x) => [x.url.split("/x402/")[1], x.auth]), [["supported", "Bearer v-jwt"], ["verify", "Bearer v-jwt"], ["settle", "Bearer s-jwt"]]);
+  // not CDP -> 503 even with key
+  const pub = await makeDeps(goodFacilitator());
+  pub.facilitatorProxyKey = "proxy-key";
+  r = await handle(new Request("https://gw.test/facilitator/verify", { method: "POST", body, headers: H }), pub); assert.equal(r.status, 503);
+});

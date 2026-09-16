@@ -24,6 +24,8 @@ export interface Env extends EnvLike {
   WITNESS_PRIVATE_KEY_JWK?: string;
   /** Workers Rate Limiting binding (wrangler.jsonc `ratelimits`). Optional: absent means unlimited free reads. */
   FREE_READS?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
+  /** Secret. Other UnyKorn Workers present this bearer to use /facilitator/* (CDP fronting). */
+  FACILITATOR_PROXY_KEY?: string;
 }
 
 /**
@@ -68,6 +70,7 @@ async function deps(env: Env): Promise<Deps> {
     kernelVersion: KERNEL_VERSION,
     schemas: SCHEMAS,
     facilitatorHeaders: facilitatorHeadersFrom(env),
+    facilitatorProxyKey: env.FACILITATOR_PROXY_KEY || undefined,
     rateLimit: env.FREE_READS ? async (key) => (await env.FREE_READS!.limit({ key })).success : undefined,
   };
 }
