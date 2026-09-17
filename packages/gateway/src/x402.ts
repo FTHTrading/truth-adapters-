@@ -202,7 +202,17 @@ async function postJson<T>(fetchFn: typeof fetch, url: string, body: unknown, ex
     headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`facilitator ${res.status} at ${new URL(url).pathname}`);
+  if (!res.ok) {
+    // CDP answers a rejected authorization (e.g. the payer's transferWithAuthorization reverts for lack of funds)
+    // with HTTP 400 and a normal VerifyResponse/SettleResponse body. That is a payment refusal, not an outage:
+    // hand it back so the caller returns 402 with the reason instead of 502 "facilitator unreachable".
+    let body: unknown = null;
+    try { body = await res.json(); } catch { /* not JSON */ }
+    if (res.status >= 400 && res.status < 500 && body && typeof body === "object" && (typeof (body as { isValid?: unknown }).isValid === "boolean" || (body as { success?: unknown }).success === false)) {
+      return body as T;
+    }
+    throw new Error(`facilitator ${res.status} at ${new URL(url).pathname}`);
+  }
   return (await res.json()) as T;
 }
 
