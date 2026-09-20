@@ -351,9 +351,15 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     mouseY = Math.max(-1, Math.min(1, -targetRotX / 0.55));
     if(vectorTelemetry) vectorTelemetry.textContent = 'VECTOR [ YAW: ' + (targetRotY >= 0 ? '+' : '') + targetRotY.toFixed(3) + ' · PITCH: ' + (targetRotX >= 0 ? '+' : '') + targetRotX.toFixed(3) + ' ]';
   }
+  // However the visitor happens to sit is "straight ahead": a slow baseline is subtracted, so the head faces them
+  // at rest and moves when they move, wherever the camera is mounted.
+  let baseYaw = null, basePitch = null;
   function onFace(nx, ny, turn, nod){
     const dx = ((1 - nx) - 0.5) * 2, dy = (ny - 0.5) * 2;
-    setLook(dx * 1.9 - (turn || 0) * 0.9, -dy * 1.5 - (nod || 0) * 0.9);
+    const rawYaw = dx * 1.9 - (turn || 0) * 0.9, rawPitch = -dy * 1.5 - (nod || 0) * 0.9;
+    if(baseYaw === null){ baseYaw = rawYaw; basePitch = rawPitch; }
+    baseYaw += (rawYaw - baseYaw) * 0.004; basePitch += (rawPitch - basePitch) * 0.004;
+    setLook(rawYaw - baseYaw, rawPitch - basePitch);
   }
 
   // What the camera tells the avatar. Computed in this browser only; none of it is sent anywhere.
@@ -478,7 +484,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     camOn = false; if(camRaf) cancelAnimationFrame(camRaf);
     if(camStream){ camStream.getTracks().forEach(function(t){ t.stop(); }); camStream = null; }
     const view = document.getElementById('camView'); if(view) view.classList.remove('on');
-    video.srcObject = null; camMode = ''; facePresent = false; targetRotZ = 0; targetLean = 1; smileT = 0;
+    video.srcObject = null; camMode = ''; facePresent = false; baseYaw = null; basePitch = null; targetRotZ = 0; targetLean = 1; smileT = 0;
     if(camBtn) camBtn.textContent = '[ TRACK WITH CAMERA ]';
     setTrack('POINTER');
   }
