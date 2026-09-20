@@ -64,7 +64,7 @@ function avatarModelFrom(env: Env): AvatarModel | undefined {
     let lastErr: unknown = new Error("no avatar model configured");
     for (const model of models) {
       try {
-        const out = (await ai.run(model, { messages, max_tokens: 220, temperature: 0.3 })) as { response?: unknown; choices?: Array<{ message?: { content?: unknown } }> } | null;
+        const out = (await ai.run(model, { messages, max_tokens: 320, temperature: 0.3 })) as { response?: unknown; choices?: Array<{ message?: { content?: unknown } }> } | null;
         const text = typeof out?.response === "string" ? out.response : typeof out?.choices?.[0]?.message?.content === "string" ? (out.choices[0].message.content as string) : "";
         if (text.trim()) return text;
         lastErr = new Error("empty response from " + model);

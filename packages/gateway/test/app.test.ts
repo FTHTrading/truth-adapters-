@@ -10,6 +10,7 @@ import type { AdapterSpec } from "../../adapters/src/types.ts";
 import { generateKeys, kindOf, MemoryLedger, verifyChain, verifyMerkleProof } from "../../kernel/src/index.ts";
 import { handle, runAnchor, type Deps } from "../src/app.ts";
 import { scanClaims } from "../src/claims.ts";
+import { relevantServices } from "../src/avatar.ts";
 import { configFromEnv } from "../src/config.ts";
 
 const PAY_TO = "0x1111111111111111111111111111111111111111";
@@ -547,7 +548,8 @@ test("avatar chat: 503 without a model, grounded prompt with one, bad input refu
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { reply: "I am a truth gateway. Agents pay per call over x402.", gated: false });
   assert.equal(seen[0]!.role, "system");
-  assert.match(seen[0]!.content, /Answer ONLY from the FACTS/);
+  assert.match(seen[0]!.content, /ONLY from the FACTS/);
+  assert.match(seen[0]!.content, /General questions/);
   assert.match(seen[0]!.content, /mode test/);
   assert.match(seen[0]!.content, /Ledger right now: 0 entries/);
   assert.match(seen[0]!.content, /unreachable right now/, "a rail that does not answer is stated, not hidden");
@@ -576,5 +578,27 @@ test("avatar chat: 503 without a model, grounded prompt with one, bad input refu
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get("retry-after"), "60");
   assert.equal(await deps.ledger.length(), 0, "talking to the avatar never touches the ledger");
+});
+
+test("avatar: a reply that trips the phrase gate gets one rewrite; catalog lookup is plain word overlap", async () => {
+  const deps = await makeDeps(goodFacilitator());
+  let calls = 0;
+  deps.avatarModel = async (messages) => {
+    calls++;
+    if (calls === 1) return "Custody means someone else holds the keys.";
+    assert.match(messages[messages.length - 1]!.content, /without these words/);
+    return "It means someone else holds the keys for you.";
+  };
+  const out = (await (await post(deps, "/avatar/chat", { messages: [{ role: "user", content: "what does holding keys for someone mean?" }] })).json()) as { reply: string; gated: boolean };
+  assert.deepEqual(out, { reply: "It means someone else holds the keys for you.", gated: false });
+  assert.equal(calls, 2);
+
+  const services = [
+    { name: "btc-address", title: "Bitcoin address balance and UTXOs", usd: 0.002, tags: "bitcoin btc" },
+    { name: "evm-balance", title: "Multi-chain EVM balance read", usd: 0.003, tags: "evm erc20" },
+    { name: "hash-sha256", title: "SHA-256 of a payload", usd: 0.001, tags: "hash" },
+  ];
+  assert.deepEqual(relevantServices(services, "can you check a bitcoin address balance?").map((x) => x.name), ["btc-address", "evm-balance"]);
+  assert.deepEqual(relevantServices(services, "what is the meaning of life"), []);
 });
 

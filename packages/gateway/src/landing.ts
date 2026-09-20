@@ -157,10 +157,18 @@ th{color:var(--mut);text-transform:uppercase}
 .dock input::placeholder{color:var(--mut)}
 .dock .hud-link{white-space:nowrap}
 .dock .hud-link:disabled{opacity:0.45;cursor:default}
+.camview{position:absolute;right:0;bottom:calc(100% + 8px);width:148px;height:111px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#000;opacity:0;visibility:hidden;transition:opacity 0.3s}
+.camview.on{opacity:0.9;visibility:visible}
+.camview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.camdot{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);display:none}
+.camtag{position:absolute;left:4px;bottom:3px;font-size:0.55rem;color:var(--mut);letter-spacing:0.08em}
+.chips{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:30px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:min(560px,92vw);pointer-events:auto}
+.chip{background:transparent;border:1px solid var(--line);color:var(--mut);padding:3px 9px;border-radius:12px;font:inherit;font-size:0.66rem;cursor:pointer}
+.chip:hover{color:#fff;border-color:var(--cyan)}
 .caption{position:absolute;z-index:11;left:50%;transform:translateX(-50%);bottom:112px;width:min(760px,92vw);text-align:center;font-size:0.92rem;line-height:1.5;color:#fff;text-shadow:0 0 12px rgba(0,243,255,0.5),0 1px 2px #000;pointer-events:none}
 .caption .you{display:block;font-size:0.72rem;color:var(--mut);margin-bottom:4px;text-shadow:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.25}}
-@media(max-width:640px){.dock{bottom:96px}.caption{bottom:144px;font-size:0.82rem}#voiceBtn{display:none}.hud-tl,.hud-tr,.hud-bl,.hud-br{font-size:0.68rem;padding:10px}.hud-tr,.hud-bl,.hud-ml{display:none}}
+@media(max-width:640px){.chips{display:none}.camview{width:96px;height:72px}.dock{bottom:96px}.caption{bottom:144px;font-size:0.82rem}#voiceBtn{display:none}.hud-tl,.hud-tr,.hud-bl,.hud-br{font-size:0.68rem;padding:10px}.hud-tr,.hud-bl,.hud-ml{display:none}}
 </style>
 </head>
 <body>
@@ -199,7 +207,7 @@ th{color:var(--mut);text-transform:uppercase}
   <div id="trackState" class="hud-sub" style="margin-bottom:6px">TRACK: POINTER</div>
   <button id="camBtn" class="hud-link" title="Uses your camera on this device only. Frames are never uploaded.">[ TRACK WITH CAMERA ]</button>
   <button id="openDrawer" class="hud-link">[ INSPECT MACHINE RUNTIME ]</button>
-  <video id="cam" playsinline muted autoplay style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></video>
+  <div id="camView" class="camview" title="Your camera, shown only to you. Frames are never uploaded."><video id="cam" playsinline muted autoplay></video><span id="camDot" class="camdot"></span><span class="camtag">LOCAL ONLY</span></div>
 </div>
 
 <div id="caption" class="caption" aria-live="polite"></div>
@@ -209,6 +217,13 @@ th{color:var(--mut);text-transform:uppercase}
   <button type="submit" class="hud-link">[ SEND ]</button>
   <button type="button" id="voiceBtn" class="hud-link">[ VOICE ON ]</button>
 </form>
+<div id="chips" class="chips">
+  <button type="button" class="chip">What is x402?</button>
+  <button type="button" class="chip">What can an agent buy from you?</button>
+  <button type="button" class="chip">What does it cost?</button>
+  <button type="button" class="chip">What is UnyKorn building?</button>
+  <button type="button" class="chip">How do I verify an entry?</button>
+</div>
 
 <div id="drawer" class="drawer">
   <div class="drawer-card">
@@ -328,10 +343,17 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
   let camStream = null, camRaf = 0, camMode = '';
   function setTrack(t){ if(trackState) trackState.textContent = 'TRACK: ' + t; }
   // normalised face position (nx, ny in 0..1, mirrored so the head follows the viewer) -> the same yaw/pitch as the pointer path
-  function onFace(nx, ny){
-    const x = (1 - nx) * window.innerWidth;
-    const y = ny * window.innerHeight;
-    onPointerMove(x, y);
+  // A person at a laptop only moves a few percent of the frame, so camera input is amplified; the pointer path is not.
+  function setLook(yaw, pitch){
+    targetRotY = Math.max(-0.8, Math.min(0.8, yaw));
+    targetRotX = Math.max(-0.55, Math.min(0.55, pitch));
+    mouseX = Math.max(-1, Math.min(1, targetRotY / 0.8));
+    mouseY = Math.max(-1, Math.min(1, -targetRotX / 0.55));
+    if(vectorTelemetry) vectorTelemetry.textContent = 'VECTOR [ YAW: ' + (targetRotY >= 0 ? '+' : '') + targetRotY.toFixed(3) + ' · PITCH: ' + (targetRotX >= 0 ? '+' : '') + targetRotX.toFixed(3) + ' ]';
+  }
+  function onFace(nx, ny, turn, nod){
+    const dx = ((1 - nx) - 0.5) * 2, dy = (ny - 0.5) * 2;
+    setLook(dx * 1.9 - (turn || 0) * 0.9, -dy * 1.5 - (nod || 0) * 0.9);
   }
 
   // What the camera tells the avatar. Computed in this browser only; none of it is sent anywhere.
@@ -344,11 +366,22 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     const now = performance.now();
     const f = r && r.faceLandmarks && r.faceLandmarks[0];
     if(!f || !f[1]){
+      const dot0 = document.getElementById('camDot'); if(dot0) dot0.style.display = 'none';
       if(facePresent && now - faceSeenAt > 2500){ facePresent = false; faceLostAt = now; targetRotZ = 0; targetLean = 1; smileT = 0; setTrack(camMode + ' · no face'); }
       return;
     }
     faceSeenAt = now;
-    onFace(f[1].x, f[1].y);
+    // Where the face is in frame, plus which way the visitor's own head is turned (nose against the eye line), mirrored.
+    let turn = 0, nod = 0;
+    if(f[33] && f[263]){
+      const mx = (f[33].x + f[263].x) / 2, my = (f[33].y + f[263].y) / 2;
+      const ed = Math.hypot(f[263].x - f[33].x, f[263].y - f[33].y) || 1;
+      turn = Math.max(-0.6, Math.min(0.6, (f[1].x - mx) / ed));
+      nod = Math.max(-0.5, Math.min(0.5, (f[1].y - my) / ed - 0.42));
+    }
+    onFace(f[1].x, f[1].y, turn, nod);
+    const dot = document.getElementById('camDot');
+    if(dot){ dot.style.left = ((1 - f[1].x) * 100) + '%'; dot.style.top = (f[1].y * 100) + '%'; dot.style.display = 'block'; }
     // Head roll from the outer eye corners, mirrored; distance from how wide the face is in frame.
     if(f[33] && f[263]){
       const ang = Math.atan2(f[263].y - f[33].y, f[263].x - f[33].x);
@@ -428,11 +461,15 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     loop();
   }
   async function startCam(){
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ setTrack('POINTER (no camera API)'); return; }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ setTrack('POINTER (no camera API)'); caption('', 'This browser will not give a page a camera. Open genesis402.com in Chrome, Edge or Safari and I can follow you.'); return; }
     try {
-      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }, audio: false });
-    } catch(e){ setTrack('POINTER (camera denied)'); return; }
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    } catch(e){
+      const why = e && e.name === 'NotAllowedError' ? 'The camera is blocked for this page. Click the camera or lock icon in the address bar, allow it, and press the button again.' : e && e.name === 'NotFoundError' ? 'I cannot find a camera on this device.' : e && e.name === 'NotReadableError' ? 'Another app is holding the camera. Close it and press the button again.' : 'The camera did not start.';
+      setTrack('POINTER (camera: ' + ((e && e.name) || 'failed') + ')'); caption('', why); return;
+    }
     video.srcObject = camStream; camOn = true;
+    const view = document.getElementById('camView'); if(view) view.classList.add('on');
     if(camBtn) camBtn.textContent = '[ STOP CAMERA ]';
     setTrack('CAMERA (loading tracker)');
     try { await startFaceLandmarker(); } catch(e){ startMotionCentroid(); }
@@ -440,6 +477,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
   function stopCam(){
     camOn = false; if(camRaf) cancelAnimationFrame(camRaf);
     if(camStream){ camStream.getTracks().forEach(function(t){ t.stop(); }); camStream = null; }
+    const view = document.getElementById('camView'); if(view) view.classList.remove('on');
     video.srcObject = null; camMode = ''; facePresent = false; targetRotZ = 0; targetLean = 1; smileT = 0;
     if(camBtn) camBtn.textContent = '[ TRACK WITH CAMERA ]';
     setTrack('POINTER');
@@ -558,7 +596,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
       setTimeout(function(){ if(gen === sayGen) speakNext(); }, Math.min(9000, 400 + text.length * 62));
       return;
     }
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(text.split('https://').join('').split('http://').join(''));
     if(voice) u.voice = voice;
     u.lang = (voice && voice.lang) || 'en-US';
     u.rate = 1.0; u.pitch = 0.85; u.volume = 1;
@@ -648,6 +686,8 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     if(!synth){ voiceBtn.textContent = '[ NO VOICE IN THIS BROWSER ]'; voiceBtn.disabled = true; }
     voiceBtn.addEventListener('click', function(){ voiceOn = !voiceOn; voiceBtn.textContent = voiceOn ? '[ VOICE ON ]' : '[ VOICE OFF ]'; if(!voiceOn && synth) synth.cancel(); });
   }
+  const chipBox = document.getElementById('chips');
+  if(chipBox) chipBox.addEventListener('click', function(e){ const t = e.target; if(t && t.className === 'chip') ask(t.textContent); });
   if(dock){
     dock.addEventListener('submit', function(e){ e.preventDefault(); const v = chatIn ? chatIn.value : ''; if(chatIn) chatIn.value = ''; ask(v); });
   }

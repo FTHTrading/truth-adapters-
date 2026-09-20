@@ -389,9 +389,9 @@ async function verifyRoute(deps: Deps, url: URL, hash: string): Promise<Response
   });
 }
 
-async function factsFor(deps: Deps, origin: string): Promise<string[]> {
+async function factsFor(deps: Deps, origin: string, question?: string): Promise<string[]> {
   const head = await deps.ledger.head();
-  return avatarFacts({ origin, cfg: deps.cfg, labels: labelsOf(deps.cfg), adapters: deps.adapters, publicKeyHex: deps.keys.publicKeyHex, ledger: { entries: await deps.ledger.length(), headSeq: head?.seq ?? null }, fetch: deps.fetch });
+  return avatarFacts({ origin, cfg: deps.cfg, labels: labelsOf(deps.cfg), adapters: deps.adapters, publicKeyHex: deps.keys.publicKeyHex, ledger: { entries: await deps.ledger.length(), headSeq: head?.seq ?? null }, fetch: deps.fetch, question });
 }
 
 /** Free, budgeted per client, never writes to the ledger. The reply is claims-gated inside avatarReply. */
@@ -409,7 +409,7 @@ async function avatarChatRoute(req: Request, deps: Deps, url: URL): Promise<Resp
   const turns = sanitizeTurns((body as { messages?: unknown } | null)?.messages);
   if (!turns) return json(400, { refused: "messages must be a non-empty array of {role: user|assistant, content: string} ending with a user turn" });
   try {
-    const out = await avatarReply(deps.avatarModel, await factsFor(deps, url.origin), turns);
+    const out = await avatarReply(deps.avatarModel, await factsFor(deps, url.origin, turns[turns.length - 1]!.content), turns);
     return json(200, { reply: out.reply, gated: out.gated });
   } catch (err) {
     return json(502, { refused: "avatar model did not answer", detail: (err instanceof Error ? err.message : String(err)).slice(0, 200) });
