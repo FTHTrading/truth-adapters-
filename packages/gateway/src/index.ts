@@ -8,6 +8,7 @@
 import { WORKER_ADAPTERS } from "../../adapters/src/registry.ts";
 import { importKeysJwk, monotonic, type WitnessKeys } from "../../kernel/src/index.ts";
 import { handle, runAnchor, type Deps } from "./app.ts";
+import type { AvatarModel } from "./avatar.ts";
 import { configFromEnv, type EnvLike } from "./config.ts";
 import { D1Ledger } from "./ledger-d1.ts";
 import { createCdpAuthHeaders } from "@coinbase/x402";
@@ -24,6 +25,12 @@ export interface Env extends EnvLike {
   WITNESS_PRIVATE_KEY_JWK?: string;
   /** Workers Rate Limiting binding (wrangler.jsonc `ratelimits`). Optional: absent means unlimited free reads. */
   FREE_READS?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
+  /** Tighter budget for POST /avatar/chat (wrangler `ratelimits` CHAT). */
+  CHAT?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
+  /** Workers AI binding (wrangler `ai`). The landing avatar's language model. Optional: absent means /avatar/chat answers 503. */
+  AI?: { run(model: string, input: unknown): Promise<unknown> };
+  /** Var. Comma-separated Workers AI model ids, tried in order. */
+  AVATAR_MODELS?: string;
   /** Secret. Other UnyKorn Workers present this bearer to use /facilitator/* (CDP fronting). */
   FACILITATOR_PROXY_KEY?: string;
 }
@@ -43,6 +50,29 @@ function facilitatorHeadersFrom(env: Env) {
   return async () => {
     const h = await make();
     return { verify: h.verify as Record<string, string>, settle: h.settle as Record<string, string> };
+  };
+}
+
+const DEFAULT_AVATAR_MODELS = "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct-fast,@cf/meta/llama-3.1-8b-instruct";
+
+/** Workers AI as the avatar's model: short, cool answers; first model that answers wins. */
+function avatarModelFrom(env: Env): AvatarModel | undefined {
+  const ai = env.AI;
+  if (!ai) return undefined;
+  const models = (env.AVATAR_MODELS || DEFAULT_AVATAR_MODELS).split(",").map((m) => m.trim()).filter(Boolean);
+  return async (messages) => {
+    let lastErr: unknown = new Error("no avatar model configured");
+    for (const model of models) {
+      try {
+        const out = (await ai.run(model, { messages, max_tokens: 220, temperature: 0.3 })) as { response?: unknown; choices?: Array<{ message?: { content?: unknown } }> } | null;
+        const text = typeof out?.response === "string" ? out.response : typeof out?.choices?.[0]?.message?.content === "string" ? (out.choices[0].message.content as string) : "";
+        if (text.trim()) return text;
+        lastErr = new Error("empty response from " + model);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
   };
 }
 
@@ -75,6 +105,8 @@ async function deps(env: Env): Promise<Deps> {
     schemas: SCHEMAS,
     facilitatorHeaders: facilitatorHeadersFrom(env),
     facilitatorProxyKey: env.FACILITATOR_PROXY_KEY || undefined,
+    avatarModel: avatarModelFrom(env),
+    chatRateLimit: env.CHAT ? async (key) => (await env.CHAT!.limit({ key })).success : undefined,
     rateLimit: env.FREE_READS ? async (key) => (await env.FREE_READS!.limit({ key })).success : undefined,
   };
 }

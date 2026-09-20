@@ -151,8 +151,16 @@ table{border-collapse:collapse;width:100%;font-size:0.75rem;margin:8px 0}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 th{color:var(--mut);text-transform:uppercase}
 .num{text-align:right}
+.dock{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:64px;display:flex;gap:6px;width:min(720px,92vw);pointer-events:auto}
+.dock input{flex:1;min-width:0;background:rgba(0,0,0,0.6);border:1px solid var(--line);color:var(--fg);padding:8px 10px;border-radius:4px;font:inherit;font-size:0.8rem;outline:none;-webkit-user-select:text;user-select:text}
+.dock input:focus{border-color:var(--cyan)}
+.dock input::placeholder{color:var(--mut)}
+.dock .hud-link{white-space:nowrap}
+.dock .hud-link:disabled{opacity:0.45;cursor:default}
+.caption{position:absolute;z-index:11;left:50%;transform:translateX(-50%);bottom:112px;width:min(760px,92vw);text-align:center;font-size:0.92rem;line-height:1.5;color:#fff;text-shadow:0 0 12px rgba(0,243,255,0.5),0 1px 2px #000;pointer-events:none}
+.caption .you{display:block;font-size:0.72rem;color:var(--mut);margin-bottom:4px;text-shadow:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.25}}
-@media(max-width:640px){.hud-tl,.hud-tr,.hud-bl,.hud-br{font-size:0.68rem;padding:10px}.hud-tr,.hud-bl,.hud-ml{display:none}}
+@media(max-width:640px){.dock{bottom:96px}.caption{bottom:144px;font-size:0.82rem}#voiceBtn{display:none}.hud-tl,.hud-tr,.hud-bl,.hud-br{font-size:0.68rem;padding:10px}.hud-tr,.hud-bl,.hud-ml{display:none}}
 </style>
 </head>
 <body>
@@ -187,11 +195,20 @@ th{color:var(--mut);text-transform:uppercase}
 </div>
 
 <div class="hud hud-br">
+  <div id="avState" class="hud-sub">AVATAR: IDLE</div>
   <div id="trackState" class="hud-sub" style="margin-bottom:6px">TRACK: POINTER</div>
   <button id="camBtn" class="hud-link" title="Uses your camera on this device only. Frames are never uploaded.">[ TRACK WITH CAMERA ]</button>
   <button id="openDrawer" class="hud-link">[ INSPECT MACHINE RUNTIME ]</button>
   <video id="cam" playsinline muted autoplay style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></video>
 </div>
+
+<div id="caption" class="caption" aria-live="polite"></div>
+<form id="chatDock" class="dock" autocomplete="off">
+  <button type="button" id="talkBtn" class="hud-link" title="Speech recognition is done by your browser. Some browsers send the audio to their own speech service to do it; this site never receives audio.">[ TALK ]</button>
+  <input id="chatIn" type="text" maxlength="400" placeholder="ask the gateway: what is this, what does it cost, what are we building" aria-label="Ask the gateway">
+  <button type="submit" class="hud-link">[ SEND ]</button>
+  <button type="button" id="voiceBtn" class="hud-link">[ VOICE ON ]</button>
+</form>
 
 <div id="drawer" class="drawer">
   <div class="drawer-card">
@@ -239,6 +256,10 @@ POST ${esc(origin)}/witness/document                # &rarr; 402 Payment Require
 POST ${esc(origin)}/witness/document  X-PAYMENT: &hellip;  # &rarr; 200 Signed Attestation &amp; Ledger Entry
 GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion proof &amp; signature check</pre>
 
+      <h3>Talking To The Gateway</h3>
+      <p>The head answers from a fact sheet assembled live from this gateway and the task rail: labels, adapters, prices, ledger head, rail health. The sheet is public at <a href="${esc(origin)}/avatar/context">${esc(origin)}/avatar/context</a>, and every answer passes the same phrase gate as this page. It is a language model, so it can still be wrong; the endpoints above are the record.</p>
+      <p>Camera tracking runs in your browser only and frames are never uploaded. The words you type or speak are sent to <code>POST /avatar/chat</code> to get an answer and are not written to the ledger. Speech recognition and the voice are your browser's own.</p>
+
       <h3>Statutory Perimeter &amp; Limitations</h3>
       <p>${esc(LIMITATIONS)}</p>
       <p>${esc(PERIMETER)}</p>
@@ -248,6 +269,8 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
 
 <script>
 (function(){
+  // NOTE FOR EDITORS: this script lives inside a TypeScript template literal. Do not use backslashes,
+  // backticks or dollar-brace in it; a regex with escaped slashes once broke the whole page. A test compiles it.
   const canvas = document.getElementById('stage');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -263,10 +286,20 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
   resize();
 
   let mouseX = 0, mouseY = 0;
-  let targetRotX = 0, targetRotY = 0;
-  let rotX = 0, rotY = 0;
+  let targetRotX = 0, targetRotY = 0, targetRotZ = 0, targetLean = 1;
+  let rotX = 0, rotY = 0, rotZ = 0, lean = 1;
   let pulseRadius = 0;
   let pulseMax = 0;
+
+  // ---- avatar state: everything the face does is driven from these ---------------------------------------
+  let mode = 'idle';                 // idle | listening | thinking | speaking
+  let mouthOpen = 0, mouthOpenT = 0; // 0 closed .. 1 wide open
+  let mouthWide = 0, mouthWideT = 0; // -1 rounded (o, u, w) .. 1 spread (e, i)
+  let smile = 0, smileT = 0;
+  let brow = 0, browT = 0;
+  let blink = 0, blinkUntil = 0, nextBlink = 1500;
+  let visemes = [];                  // [{ t, open, wide }] absolute ms on performance.now()
+  let speakingSince = 0;
 
   function onPointerMove(x, y){
     const cx = window.innerWidth / 2;
@@ -300,12 +333,58 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     const y = ny * window.innerHeight;
     onPointerMove(x, y);
   }
+
+  // What the camera tells the avatar. Computed in this browser only; none of it is sent anywhere.
+  let faceSeenAt = 0, faceLostAt = 0, facePresent = false, lastGreetAt = 0, smileSince = 0, lastSmileLineAt = 0;
+  function blend(cats, name){
+    for(let i = 0; i < cats.length; i++){ if(cats[i].categoryName === name) return cats[i].score; }
+    return 0;
+  }
+  function onFaceResult(r){
+    const now = performance.now();
+    const f = r && r.faceLandmarks && r.faceLandmarks[0];
+    if(!f || !f[1]){
+      if(facePresent && now - faceSeenAt > 2500){ facePresent = false; faceLostAt = now; targetRotZ = 0; targetLean = 1; smileT = 0; setTrack(camMode + ' · no face'); }
+      return;
+    }
+    faceSeenAt = now;
+    onFace(f[1].x, f[1].y);
+    // Head roll from the outer eye corners, mirrored; distance from how wide the face is in frame.
+    if(f[33] && f[263]){
+      const ang = Math.atan2(f[263].y - f[33].y, f[263].x - f[33].x);
+      targetRotZ = Math.max(-0.45, Math.min(0.45, -ang));
+      const fw = Math.hypot(f[263].x - f[33].x, f[263].y - f[33].y);
+      targetLean = Math.max(0.88, Math.min(1.22, 0.9 + (fw - 0.16) * 1.3));
+    }
+    const bs = r.faceBlendshapes && r.faceBlendshapes[0] && r.faceBlendshapes[0].categories;
+    let smiling = false;
+    if(bs){
+      const s = (blend(bs, 'mouthSmileLeft') + blend(bs, 'mouthSmileRight')) / 2;
+      smiling = s > 0.5;
+      smileT = Math.max(0, Math.min(1, (s - 0.2) * 1.6));          // the head mirrors a smile
+      browT = Math.max(modeBrow, Math.min(1, blend(bs, 'browInnerUp') * 1.4));
+    }
+    if(!facePresent){
+      facePresent = true;
+      setTrack(camMode + ' · face locked');
+      if(mode === 'idle' && now - lastGreetAt > 60000){
+        lastGreetAt = now;
+        say(faceLostAt ? 'There you are again.' : 'I can see you now. I am following your face, and the picture stays on your device. Ask me what we are building.');
+      }
+    }
+    if(smiling){ if(!smileSince) smileSince = now; } else smileSince = 0;
+    if(smileSince && now - smileSince > 900 && mode === 'idle' && now - lastSmileLineAt > 90000){
+      lastSmileLineAt = now;
+      say('You are smiling. I will take that as a good sign.');
+    }
+  }
+
   async function startFaceLandmarker(){
     const mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');
     const fileset = await mod.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
     const lm = await mod.FaceLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task' },
-      runningMode: 'VIDEO', numFaces: 1
+      runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true
     });
     camMode = 'CAMERA (face)'; setTrack(camMode);
     let last = -1;
@@ -314,9 +393,9 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
       const t = performance.now();
       if(video.readyState >= 2 && t !== last){
         last = t;
-        const r = lm.detectForVideo(video, t);
-        const f = r && r.faceLandmarks && r.faceLandmarks[0];
-        if(f && f[1]) onFace(f[1].x, f[1].y);
+        let r = null;
+        try { r = lm.detectForVideo(video, t); } catch(e){ r = null; }
+        onFaceResult(r);
       }
       camRaf = requestAnimationFrame(loop);
     }
@@ -361,7 +440,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
   function stopCam(){
     camOn = false; if(camRaf) cancelAnimationFrame(camRaf);
     if(camStream){ camStream.getTracks().forEach(function(t){ t.stop(); }); camStream = null; }
-    video.srcObject = null; camMode = '';
+    video.srcObject = null; camMode = ''; facePresent = false; targetRotZ = 0; targetLean = 1; smileT = 0;
     if(camBtn) camBtn.textContent = '[ TRACK WITH CAMERA ]';
     setTrack('POINTER');
   }
@@ -373,27 +452,30 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     const box = document.getElementById('agents'); if(!box) return;
     const rail = box.getAttribute('data-rail') || '';
     const elRail = document.getElementById('agRail'), elProve = document.getElementById('agProve');
-    const host = rail.replace(/^https?:\/\//, '');
+    function bare(u){ const s = String(u || ''); const i = s.indexOf('://'); return i < 0 ? s : s.slice(i + 3); }
+    const host = bare(rail);
     function txt(el, t){ if(el) el.textContent = t; }
     fetch(rail + '/health', { headers: { accept: 'application/json' } }).then(function(r){ return r.json(); }).then(function(h){
       const lanes = (h.payable_lanes || []).join(', ') || 'none';
       const led = (h.replay_protection && h.replay_protection.ledger) || {};
       const st = h.settlement || {};
+      const tasks = h.tasks || [];
+      const shown = tasks.slice(0, 6).join(', ') + (tasks.length > 6 ? ' +' + (tasks.length - 6) + ' more' : '');
       const split = led.external_receipts != null ? ' (' + led.external_receipts + ' external, ' + (led.internal_receipts || 0) + ' internal tests)' : '';
-      txt(elRail, 'task rail ' + host + ' · ' + (h.tasks || []).join(', ') + ' · payable: ' + lanes + ' · paid calls: ' + (led.receipts != null ? led.receipts : '?') + split + ' · settlement: cdp ' + (st.cdp || '?') + ', self ' + (st.self_settle || '?'));
+      txt(elRail, 'task rail ' + host + ' · ' + tasks.length + ' paid endpoints: ' + shown + ' · payable: ' + lanes + ' · paid calls: ' + (led.receipts != null ? led.receipts : '?') + split + ' · settlement: cdp ' + (st.cdp || '?') + ', self ' + (st.self_settle || '?'));
     }).catch(function(){ txt(elRail, 'task rail ' + host + ' · unreachable'); });
     const elSku = document.getElementById('agSku');
     fetch(rail + '/.well-known/x402', { headers: { accept: 'application/json' } }).then(function(r){ return r.json(); }).then(function(d){
       const k = d && d.launch_sku;
       if (!k) { txt(elSku, 'launch sku · none advertised'); return; }
-      txt(elSku, 'launch sku · ' + k.name + ' · ' + String(k.endpoint || '').replace(/^https?:\/\//, '') + ' · $' + k.price_usd + ' per call · receipts: ' + host + '/receipts');
+      txt(elSku, 'launch sku · ' + k.name + ' · ' + bare(k.endpoint) + ' · $' + k.price_usd + ' per call · receipts: ' + host + '/receipts');
     }).catch(function(){ txt(elSku, 'launch sku · unreachable'); });
     fetch(rail + '/prove/stats', { headers: { accept: 'application/json' } }).then(function(r){ return r.json(); }).then(function(p){
       txt(elProve, 'proof receipts (' + host + '/prove) · sold: ' + (p.receipts != null ? p.receipts : '?') + ' · anchor: ' + (p.anchor || '?') + ' · key ' + String(p.keyId || '').slice(0, 24));
     }).catch(function(){ txt(elProve, 'proof receipts · unreachable'); });
   })();
   window.addEventListener('touchmove', function(e){
-    if(e.touches.length > 0){
+    if(e.touches.length > 0 && !camOn){
       onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
     }
   }, {passive: true});
@@ -402,6 +484,174 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     pulseRadius = 1;
     pulseMax = Math.min(w, h) * 0.45;
   });
+
+  // ---- voice: speech out (with lip-sync), speech in, and the chat round trip -------------------------------
+  const elCaption = document.getElementById('caption');
+  const elState = document.getElementById('avState');
+  const dock = document.getElementById('chatDock');
+  const chatIn = document.getElementById('chatIn');
+  const talkBtn = document.getElementById('talkBtn');
+  const voiceBtn = document.getElementById('voiceBtn');
+  const synth = window.speechSynthesis || null;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  let voiceOn = !!synth, voice = null, handsFree = false, rec = null, recTries = 0, sayQueue = [], sayGen = 0, modeBrow = 0, history = [];
+
+  function setMode(m){
+    mode = m;
+    if(elState) elState.textContent = 'AVATAR: ' + m.toUpperCase() + (handsFree ? ' · MIC OPEN' : '');
+    modeBrow = m === 'listening' ? 0.8 : m === 'thinking' ? 0.35 : 0;
+    browT = modeBrow;
+  }
+  function caption(you, me){
+    if(!elCaption) return;
+    elCaption.textContent = '';
+    if(you){ const y = document.createElement('span'); y.className = 'you'; y.textContent = 'YOU · ' + you; elCaption.appendChild(y); }
+    if(me){ const m = document.createElement('span'); m.textContent = me; elCaption.appendChild(m); }
+  }
+  let lastYou = '';
+
+  function pickVoice(){
+    if(!synth) return;
+    const all = synth.getVoices() || [];
+    const want = ['Andrew Online', 'Guy Online', 'Christopher Online', 'Brian Online', 'Google UK English Male', 'Daniel', 'Microsoft David', 'Microsoft Mark', 'Alex', 'Google US English', 'Samantha'];
+    for(let i = 0; i < want.length && !voice; i++){
+      for(let j = 0; j < all.length; j++){ if(all[j].name.indexOf(want[i]) >= 0 && String(all[j].lang).indexOf('en') === 0){ voice = all[j]; break; } }
+    }
+    if(!voice){ for(let j = 0; j < all.length; j++){ if(String(all[j].lang).indexOf('en') === 0){ voice = all[j]; break; } } }
+  }
+  if(synth){ pickVoice(); if(synth.addEventListener) synth.addEventListener('voiceschanged', function(){ voice = null; pickVoice(); }); }
+
+  // Text -> mouth shapes. open: how far the jaw drops; wide: spread (+) or rounded (-).
+  const SHAPES = { a:[1,0.25], e:[0.55,0.75], i:[0.35,0.9], o:[0.8,-0.7], u:[0.45,-0.85], y:[0.35,0.6], w:[0.3,-0.8], m:[0,0], b:[0,0], p:[0,0], f:[0.14,0.3], v:[0.14,0.3], l:[0.35,0.2], r:[0.3,-0.2], s:[0.18,0.5], z:[0.18,0.5], t:[0.22,0.3], d:[0.22,0.3], n:[0.22,0.2], k:[0.3,0.1], g:[0.3,0.1], h:[0.45,0.1], c:[0.25,0.3], j:[0.3,-0.2], q:[0.3,-0.5], x:[0.25,0.4] };
+  function schedule(text, fromMs, rate){
+    const per = 68 / rate;
+    let t = fromMs;
+    const out = [];
+    for(let i = 0; i < text.length; i++){
+      const c = text.charAt(i).toLowerCase();
+      const s = SHAPES[c];
+      if(s){ out.push({ t: t, open: s[0], wide: s[1] }); t += per; }
+      else if(c === ' '){ out.push({ t: t, open: 0.08, wide: 0 }); t += per * 0.6; }
+      else if(c === '.' || c === ',' || c === '?' || c === '!' || c === ';' || c === ':'){ out.push({ t: t, open: 0, wide: 0 }); t += per * 4; }
+      else { t += per * 0.5; }
+    }
+    out.push({ t: t, open: 0, wide: 0 });
+    return out;
+  }
+  function splitSentences(text){
+    const parts = String(text).split(/([.!?]+ )/);
+    const out = [];
+    for(let i = 0; i < parts.length; i += 2){ const s = (parts[i] + (parts[i + 1] || '')).trim(); if(s) out.push(s); }
+    return out;
+  }
+  function speakNext(){
+    if(!sayQueue.length){ visemes = []; mouthOpenT = 0; mouthWideT = 0; setMode('idle'); if(handsFree) listen(); return; }
+    const text = sayQueue.shift();
+    const gen = ++sayGen;
+    setMode('speaking');
+    speakingSince = performance.now();
+    if(!voiceOn || !synth){
+      // Muted: still move the mouth through the sentence so the head visibly answers.
+      visemes = schedule(text, performance.now(), 1);
+      setTimeout(function(){ if(gen === sayGen) speakNext(); }, Math.min(9000, 400 + text.length * 62));
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    if(voice) u.voice = voice;
+    u.lang = (voice && voice.lang) || 'en-US';
+    u.rate = 1.0; u.pitch = 0.85; u.volume = 1;
+    let done = false;
+    function finish(){ if(done) return; done = true; if(gen === sayGen) speakNext(); }
+    u.onstart = function(){ visemes = schedule(text, performance.now() + 60, u.rate); };
+    u.onboundary = function(ev){
+      // Re-sync the mouth to the word the synthesiser is actually on (not every voice reports this).
+      if(ev && typeof ev.charIndex === 'number' && ev.charIndex >= 0 && (!ev.name || ev.name === 'word')) visemes = schedule(text.slice(ev.charIndex), performance.now(), u.rate);
+    };
+    u.onend = finish; u.onerror = finish;
+    setTimeout(finish, 1500 + text.length * 110);           // some engines never fire onend
+    synth.speak(u);
+  }
+  function say(text){
+    if(!text) return;
+    stopListening();
+    caption(lastYou, text);
+    const parts = splitSentences(text);
+    for(let i = 0; i < parts.length; i++) sayQueue.push(parts[i]);
+    if(mode !== 'speaking') speakNext();
+  }
+  function hush(){ sayGen++; sayQueue = []; visemes = []; if(synth) synth.cancel(); if(mode === 'speaking') setMode('idle'); }
+
+  function ask(text){
+    text = String(text || '').trim().slice(0, 400);
+    if(!text || mode === 'thinking') return;
+    hush();
+    lastYou = text;
+    caption(text, '…');
+    history.push({ role: 'user', content: text });
+    if(history.length > 8) history = history.slice(-8);
+    setMode('thinking');
+    fetch('/avatar/chat', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ messages: history }) })
+      .then(function(r){ return r.json().then(function(j){ return { s: r.status, j: j }; }, function(){ return { s: r.status, j: null }; }); })
+      .then(function(o){
+        let reply = o.j && o.j.reply;
+        if(o.s === 200 && reply){ history.push({ role: 'assistant', content: reply }); }
+        else {
+          history.pop();
+          reply = o.s === 429 ? 'I answer a few questions a minute for each visitor. Give me a moment and ask again.'
+                : o.s === 503 ? 'My language model is not connected on this deployment, so I can track you but not answer yet.'
+                : 'I could not reach my language model just now. The paid endpoints are unaffected. Ask me again shortly.';
+        }
+        setMode('idle');
+        say(reply);
+      })
+      .catch(function(){ history.pop(); setMode('idle'); say('The network dropped my answer. Ask me again.'); });
+  }
+
+  function stopListening(){ if(rec){ const r = rec; rec = null; try { r.onend = null; r.abort(); } catch(e){} } }
+  function listen(){
+    if(!SR || rec || mode === 'speaking' || mode === 'thinking') return;
+    const r = new SR();
+    rec = r; r.lang = 'en-US'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    let finalText = '';
+    r.onresult = function(ev){
+      let interim = '';
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        const t = ev.results[i][0].transcript;
+        if(ev.results[i].isFinal) finalText += t; else interim += t;
+      }
+      if(chatIn) chatIn.value = finalText || interim;
+    };
+    r.onerror = function(ev){ if(ev && (ev.error === 'not-allowed' || ev.error === 'service-not-allowed')){ handsFree = false; if(talkBtn) talkBtn.textContent = '[ TALK ]'; caption('', 'The microphone is blocked for this page. You can type to me instead.'); } };
+    r.onend = function(){
+      if(rec === r) rec = null;
+      const said = finalText.trim();
+      if(chatIn) chatIn.value = '';
+      if(said){ recTries = 0; ask(said); return; }
+      if(mode === 'listening') setMode('idle');
+      if(handsFree && ++recTries < 4) setTimeout(listen, 250);
+      else if(handsFree){ handsFree = false; recTries = 0; if(talkBtn) talkBtn.textContent = '[ TALK ]'; setMode('idle'); }
+    };
+    try { r.start(); setMode('listening'); } catch(e){ rec = null; }
+  }
+  if(talkBtn){
+    if(!SR){ talkBtn.textContent = '[ TALK: NOT IN THIS BROWSER ]'; talkBtn.disabled = true; }
+    talkBtn.addEventListener('click', function(){
+      if(handsFree){ handsFree = false; stopListening(); talkBtn.textContent = '[ TALK ]'; setMode(mode === 'listening' ? 'idle' : mode); return; }
+      handsFree = true; recTries = 0; talkBtn.textContent = '[ STOP LISTENING ]';
+      hush();
+      listen();
+    });
+  }
+  if(voiceBtn){
+    if(!synth){ voiceBtn.textContent = '[ NO VOICE IN THIS BROWSER ]'; voiceBtn.disabled = true; }
+    voiceBtn.addEventListener('click', function(){ voiceOn = !voiceOn; voiceBtn.textContent = voiceOn ? '[ VOICE ON ]' : '[ VOICE OFF ]'; if(!voiceOn && synth) synth.cancel(); });
+  }
+  if(dock){
+    dock.addEventListener('submit', function(e){ e.preventDefault(); const v = chatIn ? chatIn.value : ''; if(chatIn) chatIn.value = ''; ask(v); });
+  }
+  window.addEventListener('pagehide', function(){ hush(); stopListening(); });
+  setMode('idle');
+  caption('', 'I am the gateway. Ask me what this is, what it costs, or what we are building. Press TALK to speak, or type.');
 
   const nodes = [
     [-45, -75, 10], [0, -92, 20], [45, -75, 10], [0, -65, 48],
@@ -417,6 +667,8 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     [-40, 20, -35], [40, 20, -35],
     [0, 60, -20]
   ];
+  const JAW = { 21: 1, 22: 1, 23: 1, 33: 0.6 };   // nodes that drop with the jaw
+  const BROW = { 5: 1, 6: 1, 4: 0.4, 7: 0.4 };    // nodes that lift with the brows
 
   const edges = [
     [0,1],[1,2],[0,3],[1,3],[2,3],
@@ -443,29 +695,58 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     });
   }
 
-  function project(p, rx, ry, scale, cx, cy){
+  function project(p, rx, ry, scale, cx, cy, rz){
+    let px = p[0], py = p[1];
+    if(rz){ const cz = Math.cos(rz), sz = Math.sin(rz); const tx = px * cz - py * sz; py = px * sz + py * cz; px = tx; }
     const cosY = Math.cos(ry), sinY = Math.sin(ry);
-    const x1 = p[0] * cosY + p[2] * sinY;
-    const z1 = -p[0] * sinY + p[2] * cosY;
+    const x1 = px * cosY + p[2] * sinY;
+    const z1 = -px * sinY + p[2] * cosY;
     const cosX = Math.cos(rx), sinX = Math.sin(rx);
-    const y1 = p[1] * cosX - z1 * sinX;
-    const z2 = p[1] * sinX + z1 * cosX;
+    const y1 = py * cosX - z1 * sinX;
+    const z2 = py * sinX + z1 * cosX;
     const fov = 480;
     const pers = fov / (fov + z2);
     return [cx + x1 * pers * scale, cy + y1 * pers * scale, z2, pers];
   }
 
+  // A smooth curve from a to b that passes through mid.
+  function arcThrough(a, mid, b){
+    ctx.moveTo(a[0], a[1]);
+    ctx.quadraticCurveTo(2 * mid[0] - (a[0] + b[0]) / 2, 2 * mid[1] - (a[1] + b[1]) / 2, b[0], b[1]);
+  }
+
   let time = 0;
   function animate(){
     time += 0.016;
+    const now = performance.now();
     rotX += (targetRotX - rotX) * 0.055;
     rotY += (targetRotY - rotY) * 0.055;
+    rotZ += (targetRotZ - rotZ) * 0.08;
+    lean += (targetLean - lean) * 0.05;
+
+    // Mouth target: the scheduled shape for this instant; if a voice gives us nothing to sync to, keep talking anyway.
+    if(mode === 'speaking'){
+      let cur = null;
+      while(visemes.length > 1 && visemes[1].t <= now) visemes.shift();
+      if(visemes.length && visemes[0].t <= now) cur = visemes[0];
+      if(cur && visemes.length > 1){ mouthOpenT = cur.open; mouthWideT = cur.wide; }
+      else { mouthOpenT = 0.18 + 0.4 * Math.abs(Math.sin(now * 0.011) * Math.sin(now * 0.0047 + 1.3)); mouthWideT = 0.3 * Math.sin(now * 0.006); }
+    } else { mouthOpenT = 0; mouthWideT = 0; }
+    mouthOpen += (mouthOpenT - mouthOpen) * 0.38;
+    mouthWide += (mouthWideT - mouthWide) * 0.3;
+    smile += (smileT - smile) * 0.08;
+    brow += (browT - brow) * 0.1;
+
+    // Blink on a loose human rhythm; hold the eyes a little narrower while thinking.
+    if(now > nextBlink){ blinkUntil = now + 130; nextBlink = now + 2200 + Math.random() * 3800; }
+    const blinkT = now < blinkUntil ? 1 : (mode === 'thinking' ? 0.25 : 0);
+    blink += (blinkT - blink) * 0.45;
 
     ctx.clearRect(0, 0, w, h);
 
     const cx = w / 2;
     const cy = h / 2 + Math.sin(time * 0.7) * 6;
-    const scale = Math.min(w, h) / 240;
+    const scale = Math.min(w, h) / 240 * lean;
 
     // Outer Gyroscope Ring 1
     ctx.strokeStyle = 'rgba(0, 243, 255, 0.14)';
@@ -490,6 +771,22 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     }
     ctx.stroke();
 
+    // State halo: green and breathing while listening, a turning arc while thinking, driven by the mouth while speaking.
+    if(mode !== 'idle'){
+      const R = 150 * scale;
+      ctx.lineWidth = 2;
+      if(mode === 'listening'){
+        ctx.strokeStyle = 'rgba(16, 185, 129, ' + (0.35 + 0.3 * Math.sin(time * 5)) + ')';
+        ctx.beginPath(); ctx.arc(cx, cy, R * (1 + 0.02 * Math.sin(time * 5)), 0, Math.PI * 2); ctx.stroke();
+      } else if(mode === 'thinking'){
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.55)';
+        for(let k = 0; k < 3; k++){ ctx.beginPath(); ctx.arc(cx, cy, R, time * 3 + k * 2.1, time * 3 + k * 2.1 + 0.9); ctx.stroke(); }
+      } else {
+        ctx.strokeStyle = 'rgba(0, 243, 255, ' + (0.15 + mouthOpen * 0.5) + ')';
+        ctx.beginPath(); ctx.arc(cx, cy, R * (1 + mouthOpen * 0.035), 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
     // Ambient floating particles
     for(let i=0; i<particles.length; i++){
       const pt = particles[i];
@@ -501,7 +798,11 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
       ctx.fill();
     }
 
-    const proj = nodes.map(n => project(n, rotX, rotY, scale, cx, cy));
+    const jawDrop = mouthOpen * 10;
+    const proj = nodes.map(function(n, i){
+      const dy = (JAW[i] ? JAW[i] * jawDrop : 0) - (BROW[i] ? BROW[i] * brow * 5 : 0);
+      return project(dy ? [n[0], n[1] + dy, n[2]] : n, rotX, rotY, scale, cx, cy, rotZ);
+    });
 
     // Wireframe edges
     ctx.strokeStyle = 'rgba(127, 214, 189, 0.48)';
@@ -524,28 +825,51 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
       ctx.fill();
     }
 
-    // Ocular cybernetic eyes & dynamic pupil tracking
-    const eyeL = project([-22, -16, 40], rotX, rotY, scale, cx, cy);
-    const eyeR = project([22, -16, 40], rotX, rotY, scale, cx, cy);
+    // Mouth: two lips between the corners. Corners pull in when rounded, out and up when spread or smiling.
+    const half = 15 + mouthWide * 4 + smile * 3;
+    const cornerY = 50 - smile * 4.5 + mouthOpen * 2;
+    const mL = project([-half, cornerY, 41], rotX, rotY, scale, cx, cy, rotZ);
+    const mR = project([half, cornerY, 41], rotX, rotY, scale, cx, cy, rotZ);
+    const mU = project([0, 49 - mouthOpen * 2 + smile * 1.5, 47], rotX, rotY, scale, cx, cy, rotZ);
+    const mD = project([0, 51 + mouthOpen * 15 + smile * 2.5, 46], rotX, rotY, scale, cx, cy, rotZ);
+    ctx.beginPath();
+    arcThrough(mL, mU, mR);
+    ctx.quadraticCurveTo(2 * mD[0] - (mL[0] + mR[0]) / 2, 2 * mD[1] - (mL[1] + mR[1]) / 2, mL[0], mL[1]);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0, 243, 255, ' + (0.05 + mouthOpen * 0.3) + ')';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 243, 255, ' + (0.7 + mouthOpen * 0.3) + ')';
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 4 + mouthOpen * 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Ocular cybernetic eyes, lids & dynamic pupil tracking
+    const eyeL = project([-22, -16, 40], rotX, rotY, scale, cx, cy, rotZ);
+    const eyeR = project([22, -16, 40], rotX, rotY, scale, cx, cy, rotZ);
     const pupilShiftX = mouseX * 6 * scale;
     const pupilShiftY = mouseY * 4 * scale;
+    const lid = Math.max(0.06, 1 - blink);
 
-    [eyeL, eyeR].forEach(e => {
-      // Sclera socket ring
+    [eyeL, eyeR].forEach(function(e){
+      // Sclera socket ring, squeezed by the lid
       ctx.strokeStyle = 'rgba(0, 243, 255, 0.75)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(e[0], e[1], 6.5 * scale * e[3], 0, Math.PI * 2);
+      ctx.ellipse(e[0], e[1], 6.5 * scale * e[3], 6.5 * scale * e[3] * lid, rotZ, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Glowing pupil locking onto cursor
-      ctx.fillStyle = '#00f3ff';
-      ctx.shadowColor = '#00f3ff';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(e[0] + pupilShiftX, e[1] + pupilShiftY, 2.8 * scale * e[3], 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      // Glowing pupil locking onto the viewer
+      if(lid > 0.35){
+        ctx.fillStyle = '#00f3ff';
+        ctx.shadowColor = '#00f3ff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(e[0] + pupilShiftX, e[1] + pupilShiftY * lid, 2.8 * scale * e[3], 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
     });
 
     // Expanding shockwave pulse on click

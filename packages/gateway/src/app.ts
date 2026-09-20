@@ -36,6 +36,7 @@ import {
 import { ANCHORING_STATUS, formatAtomic, labelsOf, LIMITATIONS, type GatewayConfig } from "./config.ts";
 import { llmsTxt, openapiJson, pricingJson, securityTxt, statusJson, wellKnownX402 } from "./discovery.ts";
 import { agentCard, landingHtml } from "./landing.ts";
+import { avatarFacts, avatarReply, sanitizeTurns, type AvatarModel } from "./avatar.ts";
 import {
   apostleVerify,
   buildPaymentRequiredV2,
@@ -69,6 +70,10 @@ export interface Deps {
   facilitatorHeaders?: FacilitatorHeaders;
   /** Free-route rate limiter: returns false when the key has exceeded its budget. Absent = unlimited. */
   rateLimit?: (key: string) => Promise<boolean>;
+  /** Language model behind the landing avatar (Workers AI in production). Absent: /avatar/chat answers 503. */
+  avatarModel?: AvatarModel;
+  /** Tighter per-client budget for /avatar/chat, which costs model time. Absent: falls back to rateLimit. */
+  chatRateLimit?: (key: string) => Promise<boolean>;
   /** Bearer that other UnyKorn Workers present to use this gateway as their facilitator (CDP fronting). Absent = proxy off. */
   facilitatorProxyKey?: string;
 }
@@ -384,6 +389,33 @@ async function verifyRoute(deps: Deps, url: URL, hash: string): Promise<Response
   });
 }
 
+async function factsFor(deps: Deps, origin: string): Promise<string[]> {
+  const head = await deps.ledger.head();
+  return avatarFacts({ origin, cfg: deps.cfg, labels: labelsOf(deps.cfg), adapters: deps.adapters, publicKeyHex: deps.keys.publicKeyHex, ledger: { entries: await deps.ledger.length(), headSeq: head?.seq ?? null }, fetch: deps.fetch });
+}
+
+/** Free, budgeted per client, never writes to the ledger. The reply is claims-gated inside avatarReply. */
+async function avatarChatRoute(req: Request, deps: Deps, url: URL): Promise<Response> {
+  const limiter = deps.chatRateLimit ?? deps.rateLimit;
+  if (limiter) {
+    const key = "chat:" + (req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for") ?? "anonymous");
+    if (!(await limiter(key))) return json(429, { refused: "rate limited: the avatar answers a few questions a minute per visitor" }, { "retry-after": "60" });
+  }
+  if (!deps.avatarModel) return json(503, { refused: "avatar model not configured on this deployment" });
+  const raw = await req.text();
+  if (raw.length > 8192) return json(413, { refused: "body too large" });
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return json(400, { refused: "invalid JSON" }); }
+  const turns = sanitizeTurns((body as { messages?: unknown } | null)?.messages);
+  if (!turns) return json(400, { refused: "messages must be a non-empty array of {role: user|assistant, content: string} ending with a user turn" });
+  try {
+    const out = await avatarReply(deps.avatarModel, await factsFor(deps, url.origin), turns);
+    return json(200, { reply: out.reply, gated: out.gated });
+  } catch (err) {
+    return json(502, { refused: "avatar model did not answer", detail: (err instanceof Error ? err.message : String(err)).slice(0, 200) });
+  }
+}
+
 export async function handle(req: Request, deps: Deps): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -433,6 +465,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     }
     if (path === "/.well-known/truth.json") return json(200, manifest(deps, url.origin, await deps.ledger.head()));
     if (path === "/.well-known/agent.json") return json(200, agentCard(url.origin, deps.cfg, labelsOf(deps.cfg), deps.adapters, deps.keys.publicKeyHex));
+    if (path === "/avatar/context") return json(200, { facts: await factsFor(deps, url.origin), note: "Everything the landing avatar may speak from. Assembled live; nothing else is in its prompt." });
     if (path === "/health") {
       const head = await deps.ledger.head();
       return json(200, { ok: true, entries: await deps.ledger.length(), head_seq: head?.seq ?? null, head_hash: head?.hash ?? null, paid_routes: !deps.cfg.disabledReason });
@@ -480,6 +513,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   }
 
   if (req.method === "POST") {
+    if (path === "/avatar/chat") return avatarChatRoute(req, deps, url);
     const w = /^\/witness\/([a-z0-9-]+)$/.exec(path);
     if (w) return witnessRoute(req, deps, url, w[1]!);
     return json(404, { refused: "no such route" });
