@@ -127,7 +127,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .hud-tr{top:20px;right:24px;text-align:right}
 .hud-bl{bottom:20px;left:24px}
 .hud-br{bottom:20px;right:24px;text-align:right}
-.hud-ml{top:50%;left:24px;transform:translateY(-50%);max-width:46vw}
+.hud-ml{top:50%;left:24px;transform:translateY(-50%);max-width:24vw;opacity:0.85}
 .brand-title{font-size:0.88rem;font-weight:700;color:var(--cyan);text-shadow:0 0 12px rgba(0,243,255,0.4);display:flex;align-items:center;gap:8px}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 2s infinite}
 .hud-sub{font-size:0.72rem;color:var(--mut);margin-top:4px}
@@ -509,6 +509,8 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     if(me){ const m = document.createElement('span'); m.textContent = me; elCaption.appendChild(m); }
   }
   let lastYou = '';
+  let uiHover = false;
+  if(dock){ dock.addEventListener('pointerenter', function(){ uiHover = true; }); dock.addEventListener('pointerleave', function(){ uiHover = false; }); }
 
   function pickVoice(){
     if(!synth) return;
@@ -719,8 +721,10 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
   function animate(){
     time += 0.016;
     const now = performance.now();
-    rotX += (targetRotX - rotX) * 0.055;
-    rotY += (targetRotY - rotY) * 0.055;
+    // In conversation (or with the pointer down on the controls) the head turns back to face the visitor.
+    const att = camOn ? 1 : ((mode === 'idle' && !uiHover) ? 1 : 0.28);
+    rotX += (targetRotX * att - rotX) * 0.055;
+    rotY += (targetRotY * att - rotY) * 0.055;
     rotZ += (targetRotZ - rotZ) * 0.08;
     lean += (targetLean - lean) * 0.05;
 
@@ -773,7 +777,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
 
     // State halo: green and breathing while listening, a turning arc while thinking, driven by the mouth while speaking.
     if(mode !== 'idle'){
-      const R = 150 * scale;
+      const R = 116 * scale;
       ctx.lineWidth = 2;
       if(mode === 'listening'){
         ctx.strokeStyle = 'rgba(16, 185, 129, ' + (0.35 + 0.3 * Math.sin(time * 5)) + ')';
@@ -831,7 +835,7 @@ GET  ${esc(origin)}/verify/&lt;entry_hash&gt;             # &rarr; Inclusion pro
     const mL = project([-half, cornerY, 41], rotX, rotY, scale, cx, cy, rotZ);
     const mR = project([half, cornerY, 41], rotX, rotY, scale, cx, cy, rotZ);
     const mU = project([0, 49 - mouthOpen * 2 + smile * 1.5, 47], rotX, rotY, scale, cx, cy, rotZ);
-    const mD = project([0, 51 + mouthOpen * 15 + smile * 2.5, 46], rotX, rotY, scale, cx, cy, rotZ);
+    const mD = project([0, 51 + mouthOpen * 11 + smile * 2.5, 46], rotX, rotY, scale, cx, cy, rotZ);
     ctx.beginPath();
     arcThrough(mL, mU, mR);
     ctx.quadraticCurveTo(2 * mD[0] - (mL[0] + mR[0]) / 2, 2 * mD[1] - (mL[1] + mR[1]) / 2, mL[0], mL[1]);
