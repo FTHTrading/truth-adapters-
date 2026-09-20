@@ -151,7 +151,7 @@ table{border-collapse:collapse;width:100%;font-size:0.75rem;margin:8px 0}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 th{color:var(--mut);text-transform:uppercase}
 .num{text-align:right}
-.dock{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:64px;display:flex;gap:6px;width:min(720px,92vw);pointer-events:auto}
+.dock{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:96px;display:flex;gap:6px;width:min(720px,92vw);pointer-events:auto}
 .dock input{flex:1;min-width:0;background:rgba(0,0,0,0.6);border:1px solid var(--line);color:var(--fg);padding:8px 10px;border-radius:4px;font:inherit;font-size:0.8rem;outline:none;-webkit-user-select:text;user-select:text}
 .dock input:focus{border-color:var(--cyan)}
 .dock input::placeholder{color:var(--mut)}
@@ -162,10 +162,10 @@ th{color:var(--mut);text-transform:uppercase}
 .camview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
 .camdot{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);display:none}
 .camtag{position:absolute;left:4px;bottom:3px;font-size:0.55rem;color:var(--mut);letter-spacing:0.08em}
-.chips{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:30px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:min(560px,92vw);pointer-events:auto}
+.chips{position:absolute;z-index:12;left:50%;transform:translateX(-50%);bottom:34px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;width:min(600px,92vw);pointer-events:auto}
 .chip{background:transparent;border:1px solid var(--line);color:var(--mut);padding:3px 9px;border-radius:12px;font:inherit;font-size:0.66rem;cursor:pointer}
 .chip:hover{color:#fff;border-color:var(--cyan)}
-.caption{position:absolute;z-index:11;left:50%;transform:translateX(-50%);bottom:112px;width:min(760px,92vw);text-align:center;font-size:0.92rem;line-height:1.5;color:#fff;text-shadow:0 0 12px rgba(0,243,255,0.5),0 1px 2px #000;pointer-events:none}
+.caption{position:absolute;z-index:11;left:50%;transform:translateX(-50%);bottom:146px;width:min(760px,92vw);text-align:center;font-size:0.92rem;line-height:1.5;color:#fff;text-shadow:0 0 12px rgba(0,243,255,0.5),0 1px 2px #000;pointer-events:none}
 .caption .you{display:block;font-size:0.72rem;color:var(--mut);margin-bottom:4px;text-shadow:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.25}}
 @media(max-width:640px){.chips{display:none}.camview{width:96px;height:72px}.dock{bottom:96px}.caption{bottom:144px;font-size:0.82rem}#voiceBtn{display:none}.hud-tl,.hud-tr,.hud-bl,.hud-br{font-size:0.68rem;padding:10px}.hud-tr,.hud-bl,.hud-ml{display:none}}
