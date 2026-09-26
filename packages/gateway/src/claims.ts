@@ -41,22 +41,44 @@ export const FORBIDDEN_PHRASES: readonly string[] = [
   "570+",
   "empire",
   "not a demo",
+  "bank",
+  "guarantee",
+  "due diligence",
+  "sanctions screening",
+  "Bazaar",
 ];
 
-const CASE_SENSITIVE = new Set(["FDIC", "SIPC", "BitGo", "UBEC", "TROPTIONS", "UNYKORN 7777"]);
+/**
+ * Extra phrases the genesis402.com front door's stricter copy rules forbid in the avatar's own
+ * spoken words (F-5), layered on FORBIDDEN_PHRASES only for the avatar route.
+ *
+ * NOT added to FORBIDDEN_PHRASES itself: "attestation" is this gateway's own established record
+ * name ("truth-attestation-v1" schema, served at /schema/truth-attestation-v1.schema.json and in
+ * the agent card's tool outputs) and "verifiable"/"proof" are ADR-0002-APPROVED, already-served
+ * copy ("independently verifiable by anyone, without trusting the operator" in the agent card;
+ * "Inclusion proof & signature check" / "proof receipts" in the landing page's Merkle-proof
+ * feature). Putting all three in the site-wide list would gate the landing page, agent card and
+ * schema routes on their own honest, ADR-approved technical vocabulary. Scoping them to the avatar
+ * closes the 2026-09-26 incident (the avatar itself said "you will receive a signed attestation")
+ * without touching any of that other, unrelated, already-passing surface.
+ */
+export const AVATAR_FORBIDDEN_PHRASES: readonly string[] = ["attestation", "verifiable", "proof"];
+
+const CASE_SENSITIVE = new Set(["FDIC", "SIPC", "BitGo", "UBEC", "TROPTIONS", "UNYKORN 7777", "Bazaar"]);
 
 export interface ClaimsVerdict {
   ok: boolean;
   hits: Array<{ phrase: string; context: string }>;
 }
 
-export function scanClaims(text: string): ClaimsVerdict {
+/** `extra` layers additional forbidden phrases on top of FORBIDDEN_PHRASES for one call (see AVATAR_FORBIDDEN_PHRASES). */
+export function scanClaims(text: string, extra: readonly string[] = []): ClaimsVerdict {
   let body = text.split(LIMITATIONS).join(" ").split(PERIMETER).join(" ");
   // HTML-escaped copies of the same statements.
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   body = body.split(escape(LIMITATIONS)).join(" ").split(escape(PERIMETER)).join(" ");
   const hits: ClaimsVerdict["hits"] = [];
-  for (const phrase of FORBIDDEN_PHRASES) {
+  for (const phrase of extra.length ? [...FORBIDDEN_PHRASES, ...extra] : FORBIDDEN_PHRASES) {
     const hay = CASE_SENSITIVE.has(phrase) ? body : body.toLowerCase();
     const needle = CASE_SENSITIVE.has(phrase) ? phrase : phrase.toLowerCase();
     let i = -1;

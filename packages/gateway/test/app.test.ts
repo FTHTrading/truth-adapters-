@@ -9,9 +9,9 @@ import { WORKER_ADAPTERS } from "../../adapters/src/registry.ts";
 import type { AdapterSpec } from "../../adapters/src/types.ts";
 import { generateKeys, kindOf, MemoryLedger, verifyChain, verifyMerkleProof } from "../../kernel/src/index.ts";
 import { handle, runAnchor, type Deps } from "../src/app.ts";
-import { scanClaims } from "../src/claims.ts";
-import { relevantServices } from "../src/avatar.ts";
-import { configFromEnv } from "../src/config.ts";
+import { AVATAR_FORBIDDEN_PHRASES, scanClaims } from "../src/claims.ts";
+import { avatarFacts, finishReply, relevantServices } from "../src/avatar.ts";
+import { configFromEnv, labelsOf } from "../src/config.ts";
 
 const PAY_TO = "0x1111111111111111111111111111111111111111";
 const PAYER = "0x2222222222222222222222222222222222222222";
@@ -600,5 +600,74 @@ test("avatar: a reply that trips the phrase gate gets one rewrite; catalog looku
   ];
   assert.deepEqual(relevantServices(services, "can you check a bitcoin address balance?").map((x) => x.name), ["btc-address", "evm-balance"]);
   assert.deepEqual(relevantServices(services, "what is the meaning of life"), []);
+});
+
+test("avatar gate: attestation, verifiable output and a guarantee are gated; the gate's own safe text is not re-gated by 'bank'", () => {
+  const signed = finishReply("Sure, once it settles you will receive a signed attestation of the payment.");
+  assert.equal(signed.gated, true, "attestation must trip the avatar gate");
+
+  const verif = finishReply("Every call produces verifiable output you can check yourself.");
+  assert.equal(verif.gated, true, "verifiable must trip the avatar gate");
+
+  const guar = finishReply("We back every call with a make-good guarantee.");
+  assert.equal(guar.gated, true, "guarantee must trip the avatar gate");
+
+  // The safe fallback itself quotes the standing perimeter statement, which says "It is not a
+  // bank...". That must not re-trip the gate: scanClaims strips the exact PERIMETER string before
+  // matching, so "bank" inside it is invisible to the scan.
+  const selfNamedBank = finishReply("Honestly we are basically a bank for AI agents.");
+  assert.equal(selfNamedBank.gated, true, "the model calling itself a bank must still be gated");
+  assert.match(selfNamedBank.reply, /It is not a bank/);
+  assert.deepEqual(scanClaims(selfNamedBank.reply).hits, [], "the gate's own safe text must not be gated by its own 'not a bank' sentence");
+  assert.deepEqual(scanClaims(selfNamedBank.reply, AVATAR_FORBIDDEN_PHRASES).hits, [], "same, scanned with the avatar's extra phrases too");
+});
+
+test("avatar fact sheet: no call/receipt counts, no attestation/verifiable/proof, no camera or wireframe copy, no guarantee, no Bazaar", async () => {
+  const deps = await makeDeps(goodFacilitator());
+  // A rail that DOES answer, and reports the exact kind of counts the 2026-09-26 incident served
+  // ("361 total, 13 from outside wallets, 347 internal tests"), to prove the fact sheet drops them
+  // even when the upstream still has them, not merely when the rail is unreachable.
+  const richRailFetch: typeof fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "https://twin.unykorn.org/health") {
+      return Response.json({
+        service: "task server",
+        version: "1.0",
+        status: "ok",
+        tasks: ["btc-address", "evm-balance"],
+        payable_lanes: ["base"],
+        replay_protection: { ledger: { receipts: 361, external_receipts: 13, internal_receipts: 347 } },
+        settlement: { cdp: "on", self_settle: "off" },
+      });
+    }
+    if (url === "https://twin.unykorn.org/.well-known/x402") {
+      return Response.json({
+        launch_sku: { name: "btc-address", endpoint: "/task/btc-address", price_usd: 0.002, promise: "fast" },
+        services: [{ name: "btc-address", title: "Bitcoin address balance", price: { usd: 0.002 }, tags: "bitcoin" }],
+      });
+    }
+    return new Response("nope", { status: 404 });
+  }) as typeof fetch;
+
+  const facts = await avatarFacts({
+    origin: "https://genesis402.com",
+    cfg: deps.cfg,
+    labels: labelsOf(deps.cfg),
+    adapters: deps.adapters,
+    publicKeyHex: deps.keys.publicKeyHex,
+    ledger: { entries: 3, headSeq: 2 },
+    fetch: richRailFetch,
+  });
+  const sheet = facts.join("\n");
+  assert.doesNotMatch(sheet, /attestation/i);
+  assert.doesNotMatch(sheet, /verifiable/i);
+  assert.doesNotMatch(sheet, /\bproof\b/i);
+  assert.doesNotMatch(sheet, /paid calls recorded/i);
+  assert.doesNotMatch(sheet, /wireframe|camera/i);
+  assert.doesNotMatch(sheet, /guarantee/i);
+  assert.doesNotMatch(sheet, /Bazaar/i);
+  assert.doesNotMatch(sheet, /\d+ total/);
+  assert.match(sheet, /genesis402\.com/, "the page description still names the actual front door");
+  assert.match(sheet, /Nothing typed here is written to the ledger/);
 });
 
