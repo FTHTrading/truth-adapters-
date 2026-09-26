@@ -622,12 +622,13 @@ test("avatar gate: attestation, verifiable output and a guarantee are gated; the
   assert.deepEqual(scanClaims(selfNamedBank.reply, AVATAR_FORBIDDEN_PHRASES).hits, [], "same, scanned with the avatar's extra phrases too");
 });
 
-test("avatar fact sheet: no call/receipt counts, no attestation/verifiable/proof, no camera or wireframe copy, no guarantee, no Bazaar", async () => {
+test("avatar fact sheet: rail-aware (identity, MCP, receipts, lanes), catalog before adapters, no call/receipt counts, no attestation/verifiable/proof, no camera or wireframe copy, no guarantee, no Bazaar", async () => {
   const deps = await makeDeps(goodFacilitator());
   // A rail that DOES answer, and reports the exact kind of counts the 2026-09-26 incident served
   // ("361 total, 13 from outside wallets, 347 internal tests"), to prove the fact sheet drops them
-  // even when the upstream still has them, not merely when the rail is unreachable.
-  const richRailFetch: typeof fetch = (async (input: RequestInfo | URL) => {
+  // even when the upstream still has them, not merely when the rail is unreachable. Also answers the
+  // F-11 sources (agent-registration, prove/keys, MCP initialize) with the live rail's real shapes.
+  const richRailFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "https://twin.unykorn.org/health") {
       return Response.json({
@@ -643,8 +644,27 @@ test("avatar fact sheet: no call/receipt counts, no attestation/verifiable/proof
     if (url === "https://twin.unykorn.org/.well-known/x402") {
       return Response.json({
         launch_sku: { name: "btc-address", endpoint: "/task/btc-address", price_usd: 0.002, promise: "fast" },
-        services: [{ name: "btc-address", title: "Bitcoin address balance", price: { usd: 0.002 }, tags: "bitcoin" }],
+        services: [
+          { name: "btc-address", title: "Bitcoin address balance", price: { usd: 0.001 }, tags: "bitcoin" },
+          { name: "llm-infer", title: "Paid LLM inference", price: { usd: 0.25 }, tags: "ai llm" },
+        ],
+        lanes: { "base:usdc": { payable: true }, "solana:usdc": { payable: false } },
+        free_endpoints: ["/health", "/.well-known/x402"],
       });
+    }
+    if (url === "https://twin.unykorn.org/.well-known/agent-registration.json") {
+      return Response.json({
+        registrations: [{ agentId: 95721, agentRegistry: "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432" }],
+        services: [{ name: "btc-address", endpoint: "/task/btc-address" }, { name: "llm-infer", endpoint: "/task/llm-infer" }],
+      });
+    }
+    if (url === "https://twin.unykorn.org/prove/keys") {
+      return Response.json([{ keyId: "g402-key-1", alg: "ed25519", publicKeyPem: "-----BEGIN PUBLIC KEY-----\nMC4=\n-----END PUBLIC KEY-----", publicKeyHex: "ab12" }]);
+    }
+    if (url === "https://twin.unykorn.org/mcp" && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as { method?: string };
+      assert.equal(body.method, "initialize");
+      return Response.json({ result: { serverInfo: { version: "0.3.2" }, protocolVersion: "2025-06-18" } });
     }
     return new Response("nope", { status: 404 });
   }) as typeof fetch;
@@ -669,5 +689,35 @@ test("avatar fact sheet: no call/receipt counts, no attestation/verifiable/proof
   assert.doesNotMatch(sheet, /\d+ total/);
   assert.match(sheet, /genesis402\.com/, "the page description still names the actual front door");
   assert.match(sheet, /Nothing typed here is written to the ledger/);
+
+  // F-11: identity, MCP, receipts, lanes and the two-products framing all land on the sheet.
+  assert.match(sheet, /95721/, "ERC-8004 agent id");
+  assert.match(sheet, /0x8004A169FB4a3325136EB29fA0ceB6D2e539a432/, "registry address, address part only");
+  assert.match(sheet, /twin\.unykorn\.org\/mcp/, "hosted MCP endpoint");
+  assert.match(sheet, /npx -y genesis402-mcp/, "local MCP server command");
+  assert.match(sheet, /\$0\.001 to \$0\.25/, "rail price band, not the gateway's own band");
+  assert.match(sheet, /prove\/keys/, "public key location");
+  assert.match(sheet, /Ed25519/, "receipt signature algorithm");
+  assert.match(sheet, /base:usdc live/, "manifest lane status");
+  assert.match(sheet, /solana:usdc not payable/, "manifest lane status, non-payable lane");
+  assert.match(sheet, /Free rail endpoints \(no payment\).*\.well-known\/x402/, "free endpoints line");
+  assert.match(sheet, /Two products answer here/);
+  assert.doesNotMatch(sheet, /\bregistered\b/i, "the claims-gate word 'registered' must not appear even to describe the ERC-8004 identity");
+
+  const catalogIdx = facts.findIndex((f) => f.startsWith("Rail catalog:"));
+  const adaptersIdx = facts.findIndex((f) => f.startsWith("Witness adapters and prices"));
+  assert.ok(catalogIdx >= 0 && adaptersIdx >= 0 && catalogIdx < adaptersIdx, "the rail catalog line must precede the gateway's own adapter prices");
+
+  // ADR-0002: the whole assembled sheet must pass the claims gate (base + avatar-only phrases),
+  // with zero hits outside the perimeter sentence (which scanClaims strips before scanning).
+  assert.deepEqual(scanClaims(sheet, AVATAR_FORBIDDEN_PHRASES).hits, [], "assembled fact sheet must be clean under the full claims gate");
+});
+
+test("avatar regression (F-5): a model reply containing 'signed attestation' is still gated end-to-end through /avatar/chat, even after the one allowed rewrite", async () => {
+  const deps = await makeDeps(goodFacilitator());
+  deps.avatarModel = async () => "You will receive a signed attestation once the call settles.";
+  const out = (await (await post(deps, "/avatar/chat", { messages: [{ role: "user", content: "what do I get back?" }] })).json()) as { reply: string; gated: boolean };
+  assert.equal(out.gated, true, "a reply naming a 'signed attestation' must still be gated after the rewrite attempt");
+  assert.deepEqual(scanClaims(out.reply, AVATAR_FORBIDDEN_PHRASES).hits, [], "the safe fallback served instead must itself be clean");
 });
 
