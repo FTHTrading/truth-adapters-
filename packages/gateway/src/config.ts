@@ -135,7 +135,7 @@ export function modeOf(cfg: GatewayConfig): Mode {
   return "test";
 }
 
-export const ANCHORING_STATUS = "UNANCHORED: merkle anchors are internal ledger records signed by the gateway key; no external timestamp (OTS/TSA/chain) is persisted yet";
+export const ANCHORING_STATUS = "UNANCHORED: this witness ledger's merkle anchors are internal records signed by the gateway key; no external timestamp (OTS/TSA/chain) is persisted for them yet. The UnyKorn rail's x402 payment receipts (twin.unykorn.org/receipts) are a separate record set, anchored to UnyKorn Chain every 15 minutes (explorer: chain.unykorn.ai) with a daily checkpoint to Base; the witness ledger is not yet included in that anchor set.";
 
 /** Mandatory on every attestation and on the manifest (truth-attestation-v1 § labels, STATUS.md). */
 export interface Labels {
